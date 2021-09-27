@@ -4,12 +4,13 @@ from tensorflow.keras.constraints import Constraint, NonNeg
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
 from tensorflow.keras.models import load_model
 import datetime
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sn
+from extract_features_construct_dataset import get_lipschitz_constrained
 
 # Loading the datasets
 path = 'processed_google_dataset/'
@@ -36,8 +37,8 @@ train_dataset = tf.data.Dataset.from_tensor_slices((train_data, train_label))
 val_dataset = tf.data.Dataset.from_tensor_slices((val_data, val_label))
 test_dataset = tf.data.Dataset.from_tensor_slices((test_data, test_label))
 
-train_dataset = train_dataset.shuffle(880, reshuffle_each_iteration=False).batch(256)
-val_dataset = val_dataset.shuffle(880, reshuffle_each_iteration=False).batch(256)
+train_dataset = train_dataset.shuffle(880, reshuffle_each_iteration=False).batch(64)
+val_dataset = val_dataset.shuffle(880, reshuffle_each_iteration=False).batch(64)
 
 
 def tensorboard_callback():
@@ -45,17 +46,68 @@ def tensorboard_callback():
     tensorboard_callback = TensorBoard(log_dir=logdir)
     return tensorboard_callback
 
+# Constraint class
+class customConstraint(Constraint):  #### De vazut API
+    def __init__(self, rho):
+        self.rho = rho
 
-def get_model():
+    def __call__(self, w):
+        w = w * tf.cast(tf.math.greater_equal(w, 0.), w.dtype)
+        norm = tf.norm(w, ord=2)
+        return w * self.rho / (norm + np.spacing(1))
+
+
+# Callback class for monitoring the Lipschitz constant
+class lip_stats_callback(Callback):
+    def on_epoch_begin(self, epoch, logs=None):
+        lip_cst = get_lipschitz_constrained(model)
+        print(f'The Lipschitz constant on epoch {epoch} is {lip_cst}')
+
+# Constraint callback class
+class norm_constraint(Callback):
+    def __init__(self, rho):
+        self.rho = rho
+        self.m = 0
+
+    def on_train_begin(self, logs=None):
+        m = 0
+        for l in self.model.layers:
+            if 'dense' in l.name:
+                m = m + 1
+        self.m = m
+
+
+    def get_projection(self, w, rho):
+        w = w * np.greater_equal(w, 0)
+        norm = np.linalg.norm(w, ord=2)
+        return w * np.power(rho, 1/self.m) /(norm + np.spacing(1)) ## rho^(1/m)
+
+    def on_batch_end(self, batch, logs=None):
+        for l in self.model.layers:
+            if 'dense' in l.name:
+                w = l.get_weights()[0]
+                b = l.get_weights()[1]
+                w_new = self.get_projection(w, self.rho)
+                l.set_weights([w_new, b])  # de verificat
+
+## cst < 5;
+def get_model(rho):
+    m = 6
     inp = Input((880,))
-    hdn = Dense(1024, activation='relu', kernel_constraint=NonNeg())(inp)
-    # hdn = Dropout(0.8)(hdn)
-    hdn = Dense(512, activation='relu', kernel_constraint=NonNeg())(hdn)
-    hdn = Dense(256, activation='relu', kernel_constraint=NonNeg())(hdn)
-    hdn = Dense(128, activation='relu', kernel_constraint=NonNeg())(hdn)
-    hdn = Dense(64, activation='relu', kernel_constraint=NonNeg())(hdn)
-    hdn = Dense(32, activation='relu', kernel_constraint=NonNeg())(hdn)
-    out = Dense(10, activation='softmax', kernel_constraint=NonNeg())(hdn)
+    hdn = Dense(256, activation='relu', kernel_constraint=customConstraint(rho=np.power(rho, 1/m)))(inp)
+    # hdn = Dropout(0.1)(hdn)
+    hdn = Dense(128, activation='relu', kernel_constraint=customConstraint(rho=np.power(rho, 1/m)))(hdn)
+    # hdn = Dropout(0.1)(hdn)
+    hdn = Dense(128, activation='relu', kernel_constraint=customConstraint(rho=np.power(rho, 1/m)))(hdn)
+    # hdn = Dropout(0.1)(hdn)
+    # hdn = Dense(256, activation='relu', kernel_constraint=NonNeg())(hdn)
+    # hdn = Dropout(0.2)(hdn)
+    # hdn = Dense(128, activation='relu', kernel_constraint=NonNeg())(hdn)
+    # hdn = Dropout(0.2)(hdn)
+    # hdn = Dense(128, activation='relu', kernel_constraint=NonNeg())(hdn)
+    hdn = Dense(64, activation='relu', kernel_constraint=customConstraint(rho=np.power(rho, 1/m)))(hdn)
+    hdn = Dense(32, activation='relu', kernel_constraint=customConstraint(rho=np.power(rho, 1/m)))(hdn)
+    out = Dense(10, activation='softmax', kernel_constraint=customConstraint(rho=np.power(rho, 1/m)))(hdn)
 
     model = Model(inputs=inp, outputs=out)
     return model
@@ -63,14 +115,18 @@ def get_model():
 
 if __name__ == '__main__':
     #### Model Training
-    model = get_model()
+    model = get_model(rho=1000000)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
-    model.fit(train_dataset, epochs=600, validation_data=val_dataset, verbose=2,
+    # model.load_weights('bin/models_constrained/model_1layer.h5')
+    model.fit(train_dataset, epochs=2000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
-                         EarlyStopping(monitor="val_loss", patience=150, restore_best_weights=False),
-                         ModelCheckpoint('bin/models_constrained/model_Dropout1_moreLayers.h5', save_best_only=True, verbose=1)])
+                         EarlyStopping(monitor="val_loss", patience=600, restore_best_weights=False),
+                         # norm_constraint(rho=1000),
+                         lip_stats_callback(),
+                         ModelCheckpoint('bin/models_constrained/model_5layer_1Constrained.h5', save_best_only=True, verbose=1)])
 
+    # model = load_model("bin\models_constrained\\model_Dropout1_moreLayersV2.h5")
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')
