@@ -161,13 +161,18 @@ def get_upper_lipschitz(norms):
 
 def get_lipschitz_constrained(model):
     cst = []
+    w_list = []
     for x in model.layers:
         if 'dense' in x.name:
             w = x.get_weights()[0]
-            if cst == []:
-                cst = w
-            else:
-                cst = np.matmul(cst, w)
+            w_list.append(w)
+
+    for index in reversed(range(len(w_list))):
+        if cst == []:
+            cst = np.array(w_list[index]).transpose()
+        else:
+            cst = np.matmul(cst, np.array(w_list[index]).transpose())
+
     cst = np.linalg.norm(cst, ord=2)
     return cst
 
