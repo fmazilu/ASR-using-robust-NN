@@ -103,25 +103,25 @@ class norm_constraint_FISTA(Callback):
         for index in reversed(range(len(w_list))):
             if np.array_equal(w, w_list[index]):
                 w_index = index
-        print(w_index)
         for index in reversed(range(len(w_list))):
-            if index > w_index:    ### ce se intampla daca e ultima matrice
+            if index > w_index:
                 if A == []:
                     A = np.array(w_list[index]).transpose()
                 else:
                     A = np.matmul(A, np.array(w_list[index]).transpose())
-            elif index <= w_index:  ### ce se intampla daca e prima matrice
+            elif index < w_index:
                 if B == []:
                     B = np.array(w_list[index]).transpose()
                 else:
                     B = np.matmul(B, np.array(w_list[index]).transpose())
-                if index == 0:
-                    B = np.eye(np.array(w).shape[1], np.array(w).shape[0])
+            if w_index == 0:
+                B = np.eye(np.array(w).shape[0], np.array(w).shape[0])
+            if w_index == (len(w_list)-1):
+                A = np.eye(np.array(w).shape[1], np.array(w).shape[1])
         A = np.array(A)
         B = np.array(B)
-        print(f'B={B.shape}; A={A.shape} ; w={w.shape}')
         Y0 = np.zeros([A.shape[0], B.shape[1]])
-        w_new = self.Constraint_Fista(w, Y0, A, B, self.nit, self.rho)
+        w_new = self.Constraint_Fista(w.T, Y0, A, B, self.nit, self.rho)
         return w_new
 
     def on_batch_end(self, batch, logs=None):
@@ -130,4 +130,4 @@ class norm_constraint_FISTA(Callback):
                 w = l.get_weights()[0]
                 b = l.get_weights()[1]
                 w_new = self.get_projection(w)
-                l.set_weights([w_new, b])
+                l.set_weights([w_new.T, b])
