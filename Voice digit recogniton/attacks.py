@@ -1,6 +1,7 @@
 import tensorflow as tf
 from art.attacks.evasion import FastGradientMethod, CarliniL2Method
-from art.estimators.classification import TensorFlowClassifier, KerasClassifier
+from art.estimators.classification import TensorFlowClassifier, KerasClassifier, TensorFlowV2Classifier
+from tensorflow.keras.losses import CategoricalCrossentropy
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from tensorflow.keras.utils import to_categorical
@@ -47,6 +48,8 @@ if __name__ == '__main__':
     val_data = all_data[train_data.shape[0]:train_data.shape[0] + val_data.shape[0]]
     test_data = all_data[train_data.shape[0] + val_data.shape[0]:]
 
+    print(test_data.shape)
+
     model_constrained = load_model("bin/models_constrained/model_3layerFISTA_rho5_droupout.h5")
     model_unconstrained = load_model("bin/models/model_dropout0.5.h5")
     sigmas = np.linspace(0, 10, 10)
@@ -83,13 +86,24 @@ if __name__ == '__main__':
 
     elif type_of_attack == 'w':
         ## de continuat cu atacuri de tip white-box
-        disable_eager_execution()
-        # model_constrained = KerasClassifier(model=model_constrained)#, Having problems with casting
-        # #                                     # input_layer=0,
-        # #                                     # output_layer=0)
+        # disable_eager_execution()
+        model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=10, input_shape=(880,)
+                                                   ,loss_object=CategoricalCrossentropy())
 
-        model_unconstrained = KerasClassifier(model=model_unconstrained)#,model=model_unconstrained, use_logits=False
-                                              # input_layer=0,
-                                              # output_layer=0)
-        attack = FastGradientMethod(estimator=model_unconstrained, eps=0.2)
+        model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=10, input_shape=(880,)
+                                                     ,loss_object=CategoricalCrossentropy())
 
+        attack_constrained = FastGradientMethod(estimator=model_constrained, eps=0.01)
+        attack_unconstrained = FastGradientMethod(estimator=model_unconstrained, eps=0.01)
+
+        test_adv_constrained = attack_constrained.generate(x=test_data, y=test_label)
+        test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
+
+        predictions_constrained = model_constrained.predict(test_adv_constrained)
+        predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
+
+        accuracy_constrained = np.sum(np.argmax(predictions_constrained, axis=1) == np.argmax(test_label, axis=1)) / len(test_label)
+        print("Accuracy on adversarial test examples: {}%".format(accuracy_constrained * 100))
+
+        accuracy_unconstrained = np.sum(np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label, axis=1)) / len(test_label)
+        print("Accuracy on adversarial test examples unconstrained: {}%".format(accuracy_unconstrained * 100))
