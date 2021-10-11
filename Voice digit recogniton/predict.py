@@ -9,6 +9,7 @@ from tensorflow.keras.utils import to_categorical
 import matplotlib.pyplot as plt
 import seaborn as sn
 from sklearn.preprocessing import StandardScaler
+from train_constraints import customConstraint
 from extract_features_construct_dataset import get_norms, get_upper_lipschitz, get_lipschitz_constrained
 
 if __name__ == '__main__':
@@ -29,7 +30,9 @@ if __name__ == '__main__':
     scaler1 = StandardScaler()
     mfcc_own_test = scaler1.fit_transform(mfcc_own_test)
 
-    model = load_model("bin\models_constrained\\model_Dropout1_moreLayers.h5")
+    model = load_model("bin/models_constrained/customConstraintClass_model.h5",
+                        #### There is a problem loading the model with customConstraint
+                       custom_objects={'customConstraint': customConstraint})
     print(model.summary())
 
     y = np.argmax(model.predict(mfcc_own_test), axis=1)
