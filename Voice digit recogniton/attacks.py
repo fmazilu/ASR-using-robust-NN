@@ -48,9 +48,7 @@ if __name__ == '__main__':
     val_data = all_data[train_data.shape[0]:train_data.shape[0] + val_data.shape[0]]
     test_data = all_data[train_data.shape[0] + val_data.shape[0]:]
 
-    print(test_data.shape)
-
-    model_constrained = load_model("bin/models_constrained/model_3layerFISTA_rho5_droupout.h5")
+    model_constrained = load_model("bin/models_constrained/model_Dropout02_moreLayersV2.h5")
     model_unconstrained = load_model("bin/models/model_dropout0.5.h5")
     sigmas = np.linspace(0, 10, 10)
     accuracy_constrained = []
@@ -87,23 +85,38 @@ if __name__ == '__main__':
     elif type_of_attack == 'w':
         ## de continuat cu atacuri de tip white-box
         # disable_eager_execution()
+        eps = np.linspace(0, 0.3, 10)
         model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=10, input_shape=(880,)
-                                                   ,loss_object=CategoricalCrossentropy())
+                                                   , loss_object=CategoricalCrossentropy())
 
         model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=10, input_shape=(880,)
-                                                     ,loss_object=CategoricalCrossentropy())
+                                                     , loss_object=CategoricalCrossentropy())
+        for item in eps:
+            attack_constrained = FastGradientMethod(estimator=model_constrained, eps=item)
+            attack_unconstrained = FastGradientMethod(estimator=model_unconstrained, eps=item)
 
-        attack_constrained = FastGradientMethod(estimator=model_constrained, eps=0.01)
-        attack_unconstrained = FastGradientMethod(estimator=model_unconstrained, eps=0.01)
+            test_adv_constrained = attack_constrained.generate(x=test_data)
+            test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
 
-        test_adv_constrained = attack_constrained.generate(x=test_data, y=test_label)
-        test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
+            predictions_constrained = model_constrained.predict(test_adv_constrained)
+            predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
 
-        predictions_constrained = model_constrained.predict(test_adv_constrained)
-        predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
+            accuracy_constrained1 = np.sum(np.argmax(predictions_constrained, axis=1) == np.argmax(test_label, axis=1)) / len(test_label)
+            accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
+            print("Accuracy on adversarial test examples: {}%".format(accuracy_constrained1 * 100))
 
-        accuracy_constrained = np.sum(np.argmax(predictions_constrained, axis=1) == np.argmax(test_label, axis=1)) / len(test_label)
-        print("Accuracy on adversarial test examples: {}%".format(accuracy_constrained * 100))
+            accuracy_unconstrained1 = np.sum(np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label, axis=1)) / len(test_label)
+            accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
+            print("Accuracy on adversarial test examples unconstrained: {}%".format(accuracy_unconstrained1 * 100))
 
-        accuracy_unconstrained = np.sum(np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label, axis=1)) / len(test_label)
-        print("Accuracy on adversarial test examples unconstrained: {}%".format(accuracy_unconstrained * 100))
+        fig, ax = plt.subplots()
+        ax.plot(eps, accuracy_constrained, color='r', label='Constrained Model')
+        ax.plot(eps, accuracy_unconstrained, color='b', label='Unconstrained Model')
+        ax.legend()
+        ax.set_title('Accuracy vs noise sigma')
+        ax.set_xlabel('Sigma')
+        ax.set_ylabel('Accuracy')
+        plt.show()
+
+        ###Add carlini method to white box attacks
+
