@@ -7,6 +7,7 @@ import numpy as np
 # Constraint callback class
 class norm_constraint(Callback):
     def __init__(self, rho):
+        super(Callback, self).__init__()
         self.rho = rho
         self.m = 0
 
@@ -53,6 +54,7 @@ class norm_constraint_FISTA(Callback):
         self.rho = rho
         self.m = 0
         self.nit = nit
+        self.rho = self.rho + 5
 
 
     def get_w_list(self):
@@ -120,6 +122,8 @@ class norm_constraint_FISTA(Callback):
         return w_new
 
     def on_batch_end(self, batch, logs=None):
+        if self.rho > 2:
+            self.rho = self.rho - 0.0001
         for l in self.model.layers:
             if 'dense' in l.name:
                 w = l.get_weights()[0]
@@ -129,10 +133,12 @@ class norm_constraint_FISTA(Callback):
 
 
 class simple_norm_constraint(Callback):
-    def __init__(self, rho):
+    def __init__(self, rho, affected_layers_indices):
         super(Callback, self).__init__()
         self.rho = rho
         self.m = 0
+        # this is used for affecting only some layers' weights, if left empty all will be affected
+        self.affected_layers_indices = affected_layers_indices
 
     def get_w_list(self):
         w_list = []
@@ -142,6 +148,13 @@ class simple_norm_constraint(Callback):
                 # print(f"w inainte de modificare {w}")
                 w_list.append(w)
         return w_list
+
+    def get_layer_list(self):
+        l_list = []
+        for l in self.model.layers:
+            if 'dense' in l.name:
+                l_list.append(l)
+        return l_list
 
     def get_projection(self, w):
         w_list = self.get_w_list()
@@ -160,9 +173,23 @@ class simple_norm_constraint(Callback):
         return w_new
 
     def on_batch_end(self, batch, logs=None):
-        for l in self.model.layers:
-            if 'dense' in l.name:
-                w = l.get_weights()[0]
-                b = l.get_weights()[1]
-                w_new = self.get_projection(w)
-                l.set_weights([w_new, b])
+        layer_list = self.get_layer_list()
+        if self.affected_layers_indices == []:
+            for l in self.model.layers:
+                if 'dense' in l.name:
+                    w = l.get_weights()[0]
+                    b = l.get_weights()[1]
+                    w_new = self.get_projection(w)
+                    l.set_weights([w_new, b])
+        else:
+            for index in reversed(range(len(layer_list))):
+                for layer_index in self.affected_layers_indices:
+                    if layer_index == index:
+                        for l in self.model.layers:
+                            if l == layer_list[index]:
+                                w = l.get_weights()[0]
+                                b = l.get_weights()[1]
+                                w_new = self.get_projection(w)
+                                l.set_weights([w_new, b])
+
+
