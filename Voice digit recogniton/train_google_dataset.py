@@ -47,11 +47,24 @@ def tensorboard_callback():
 
 def get_model():
     inp = Input((880,))
-    hdn = Dense(256, activation='relu')(inp)
+    hdn = Dense(1024, activation='relu')(inp)
+    hdn = BatchNormalization()(hdn)
     hdn = Dropout(0.5)(hdn)
+
+    hdn = Dense(512, activation='relu')(hdn)
+    hdn = BatchNormalization()(hdn)
+    hdn = Dropout(0.4)(hdn)
+
+    hdn = Dense(256, activation='relu')(hdn)
+    hdn = BatchNormalization()(hdn)
+    hdn = Dropout(0.4)(hdn)
+
     hdn = Dense(128, activation='relu')(hdn)
-    hdn = Dropout(0.5)(hdn)
+    hdn = BatchNormalization()(hdn)
+
     hdn = Dense(64, activation='relu')(hdn)
+    hdn = BatchNormalization()(hdn)
+
     out = Dense(10, activation='softmax')(hdn)
 
     model = Model(inputs=inp, outputs=out)
@@ -63,10 +76,10 @@ if __name__ == '__main__':
     model = get_model()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
-    model.fit(train_dataset, epochs=600, validation_data=val_dataset, verbose=2,
+    model.fit(train_dataset, epochs=2000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
-                         EarlyStopping(monitor="val_loss", patience=150, restore_best_weights=False),
-                         ModelCheckpoint('bin/models/model_dropout0.5.h5', save_best_only=True, verbose=1)])
+                         EarlyStopping(monitor="val_loss", patience=600, restore_best_weights=False),
+                         ModelCheckpoint('bin/models/baseline.h5', save_best_only=True, verbose=1)])
               # class_weight=class_weight)
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
