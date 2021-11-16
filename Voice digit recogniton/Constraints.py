@@ -159,16 +159,19 @@ class simple_norm_constraint(Callback):
     def get_projection(self, w):
         w_list = self.get_w_list()
         cst = []
+        # for i in range(len(w_list)):
+        #     w_list[i] = w_list[i] * np.greater_equal(w_list[i], 0)
+
         for index in reversed(range(len(w_list))):
             if cst == []:
                 cst = np.array(w_list[index]).transpose()
                 # print(f"cst: {cst}")
             else:
                 cst = np.matmul(cst, np.array(w_list[index]).transpose())
-        # print(f"cst {np.linalg.norm(cst, ord=2)}")
-        w_new = w * np.greater_equal(w, 0)
-        w_new = w_new * np.power((self.rho / (np.linalg.norm(cst, ord=2) + np.spacing(1))), 1/len(w_list))
-        # print(f"no of layers {len(w_list)}")
+        # w = w * np.greater_equal(w, 0)
+        w_new = w * np.power((self.rho / (np.linalg.norm(cst, ord=2) + np.spacing(1))), 1/len(w_list))
+        # print(w_new)
+        # print(np.all(w_new < 0))  # To see if all components are non-negative
 
         return w_new
 
@@ -178,6 +181,7 @@ class simple_norm_constraint(Callback):
             for l in self.model.layers:
                 if 'dense' in l.name:
                     w = l.get_weights()[0]
+                    print(np.all(w < 0))  # To see if all components are non-negative
                     b = l.get_weights()[1]
                     w_new = self.get_projection(w)
                     l.set_weights([w_new, b])
