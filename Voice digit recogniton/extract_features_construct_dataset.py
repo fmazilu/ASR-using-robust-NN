@@ -118,12 +118,12 @@ def get_file_names_and_labels(file_path):
     for x in digit:
         if x in commands:
             digit_commands = np.append(digit_commands, x)
-    print('Commands:', digit_commands)
+    # print('Commands:', digit_commands)
 
     i = 0
     for x in digit_commands:
         data_dir1 = str(data_dir) + '\\' + str(x)
-        print(data_dir1)
+        # print(data_dir1)
         filenames += tf.io.gfile.glob(str(data_dir1) + '/*')
         for index in range(len(os.listdir(data_dir1))):
             labels.append(i)
@@ -185,19 +185,42 @@ if __name__ == '__main__':
     # Get files
     filenames, labels = get_file_names_and_labels(data_dir)
 
-    #shuffle files and labels at the same time
+    raw_w, sampling_rate = librosa.load('data\\four\\0cd323ec_nohash_2.wav', mono=True)
+    print(max(abs(raw_w)))
+
+    # shuffle files and labels at the same time
     filenames, labels = shuffle(filenames, labels)
 
-    # Compute MFCC for all files
-    mfcc_whole_dataset_flattened = compute_mfcc_all_files(filenames)
+    # Divide into train, dev and test sets before calculating MFCCs
+    filenames_train = filenames[:int(int(len(filenames))*0.7)]
+    # print(len(filenames))
+    # print(len(filenames_train))
+    filenames_dev = filenames[int(int(len(filenames))*0.7): int(int(len(filenames))*0.9)]
+    # print(len(filenames_dev))
+    filenames_test = filenames[-int(int(len(filenames))*0.1):]
+    # print(len(filenames_test))
+    # print(filenames_train[34])
 
-    # save obtained coefficients in train/dev/test datasets
-    mfcc_train = mfcc_whole_dataset_flattened[:int(int(mfcc_whole_dataset_flattened.shape[0])*0.7)]
-    mfcc_dev = mfcc_whole_dataset_flattened[int(int(mfcc_whole_dataset_flattened.shape[0])*0.7): int(int(mfcc_whole_dataset_flattened.shape[0])*0.9)]
-    mfcc_test = mfcc_whole_dataset_flattened[-int(int(mfcc_whole_dataset_flattened.shape[0])*0.1):]
-    labels_train = labels[:int(int(labels.shape[0])*0.7)]
+    labels_train = labels[:int(int(labels.shape[0]) * 0.7)]
+    # print(labels_train.shape)
     labels_dev = labels[int(int(labels.shape[0])*0.7): int(int(labels.shape[0])*0.9)]
-    labels_test = labels[-int(int(mfcc_whole_dataset_flattened.shape[0])*0.1):]
+    # print(labels_dev.shape)
+    labels_test = labels[-int(int(labels.shape[0])*0.1):]
+    # print(labels_test.shape)
+
+    # Saving test filenames and labels
+    np.save("test_dataset_to_add_noise\\test_label", labels_test)
+    np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
+
+
+    # Compute MFCC for all files
+    mfcc_train = compute_mfcc_all_files(filenames_train)
+    print(mfcc_train.shape)
+    mfcc_dev = compute_mfcc_all_files(filenames_dev)
+    print(mfcc_dev.shape)
+    mfcc_test = compute_mfcc_all_files(filenames_test)
+    print(mfcc_test.shape)
+
 
     np.save("processed_google_dataset\\train_data", mfcc_train)
     np.save("processed_google_dataset\\train_label", labels_train)
