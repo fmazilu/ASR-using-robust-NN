@@ -1,5 +1,6 @@
+#%%
 import tensorflow as tf
-from art.attacks.evasion import FastGradientMethod, CarliniL2Method
+from art.attacks.evasion import FastGradientMethod, ImperceptibleASR, CarliniWagnerASR
 from art.estimators.classification import TensorFlowClassifier, KerasClassifier, TensorFlowV2Classifier
 from tensorflow.keras.losses import CategoricalCrossentropy
 from sklearn.preprocessing import StandardScaler
@@ -11,6 +12,8 @@ import librosa
 from Constraints import customConstraint
 # from extract_features_construct_dataset import get_lipschitz_constrained, get_upper_lipschitz, get_norms
 # from mixtgauss import add_noise
+
+
 
 def load_npy_dataset(path):
     train_data = np.load(path + "train_data.npy")
@@ -25,6 +28,7 @@ def load_npy_dataset(path):
 
     return train_data, train_label, val_data, val_label, test_data, test_label
 
+
 def standardize_dataset(train_data, val_data, test_data):
     # Standardizing the data
     all_data = np.concatenate((train_data, val_data, test_data), axis=0)
@@ -37,10 +41,45 @@ def standardize_dataset(train_data, val_data, test_data):
 
     return train_data, val_data, test_data
 
+### Type one black-box attack
 def add_white_noise(array, sigma):
     noise = np.random.normal(0, sigma, np.array(array).shape[0])
     noisy_array = array + noise
     return noisy_array
+
+
+def black_box_attack_on_audio(file_path, utterance_length, sigma = 0, p = 0, alpha = 0):
+    # Get raw .wav data and sampling rate from librosa's load function
+    raw_w, sampling_rate = librosa.load(file_path, mono=True)
+
+    if sigma != 0:
+        raw_w = add_white_noise(raw_w, sigma)
+    elif (p != 0) and (alpha != 0):
+        raw_w = add_noise(x=np.expand_dims(raw_w, axis=0), p=p, alpha=alpha)
+        raw_w = np.transpose(raw_w)
+        raw_w = raw_w.flatten()
+    # else:
+        # print('There were no valid arguments for adding noise.')
+
+    # Obtain MFCC Features from raw data
+    mfcc_features = librosa.feature.mfcc(raw_w, sampling_rate)
+    if mfcc_features.shape[1] > utterance_length:
+        mfcc_features = mfcc_features[:, 0:utterance_length]
+    else:
+        mfcc_features = np.pad(mfcc_features, ((0, 0), (0, utterance_length - mfcc_features.shape[1])),
+                               mode='constant', constant_values=0)
+
+    return mfcc_features
+
+
+def black_box_attack_on_audio_dataset(filenames, sigma, p, alpha):
+    mfcc_whole_dataset = np.zeros((len(filenames), 20, 44))
+    mfcc_whole_dataset_flattened = np.zeros((len(filenames), 20 * 44))
+    for index in range(len(filenames)):
+        mfcc_whole_dataset[index] = black_box_attack_on_audio(filenames[index], 44, sigma=sigma, p=p, alpha=alpha)
+        mfcc_whole_dataset_flattened[index] = mfcc_whole_dataset[index].flatten()
+    return mfcc_whole_dataset_flattened
+### Type one black-box attack
 
 
 def mixtgauss(N, p, sigma0, sigma1):
@@ -106,18 +145,27 @@ def add_noise_mixture_on_dataset(dataset, p, alpha):
     return noisy_dataset
 
 
-def black_box_attack_on_audio(file_path, utterance_length, sigma = 0, p = 0, alpha = 0):
+def add_white_noise_with_snr(audio, target_snr_db):
+    sample = np.asanyarray(audio)
+    signal_avg_watts = np.mean(sample ** 2)
+    signal_avg_db = 10 * np.log10(signal_avg_watts)
+    noise_avg_db = signal_avg_db - target_snr_db
+    noise_avg_watts = 10 ** (noise_avg_db / 10)
+    mean_noise = 0
+    # k = np.sqrt(1 / (10 ** (target_snr_db / 10))) // dacă vrei să normezi la puterea semnalului
+    k = 1
+    noise_volts = k * np.random.normal(mean_noise, np.sqrt(noise_avg_watts), len(sample))
+    noise_volts_power = np.mean(noise_volts ** 2)
+    noise_db = 10 * np.log10(noise_volts_power)
+    noisy_signal = sample + noise_volts
+    return noisy_signal
+
+
+def black_box_attack_on_audio_snr(file_path, utterance_length, target_snr_db):
     # Get raw .wav data and sampling rate from librosa's load function
     raw_w, sampling_rate = librosa.load(file_path, mono=True)
 
-    if sigma != 0:
-        raw_w = add_white_noise(raw_w, sigma)
-    elif (p != 0) and (alpha != 0):
-        raw_w = add_noise(x=np.expand_dims(raw_w, axis=0), p=p, alpha=alpha)
-        raw_w = np.transpose(raw_w)
-        raw_w = raw_w.flatten()
-    # else:
-        # print('There were no valid arguments for adding noise.')
+    raw_w = add_white_noise_with_snr(raw_w, target_snr_db)
 
     # Obtain MFCC Features from raw data
     mfcc_features = librosa.feature.mfcc(raw_w, sampling_rate)
@@ -130,11 +178,11 @@ def black_box_attack_on_audio(file_path, utterance_length, sigma = 0, p = 0, alp
     return mfcc_features
 
 
-def black_box_attack_on_audio_dataset(filenames, sigma, p, alpha):
+def black_box_attack_on_audio_dataset_snr(filenames, target_snr_db):
     mfcc_whole_dataset = np.zeros((len(filenames), 20, 44))
     mfcc_whole_dataset_flattened = np.zeros((len(filenames), 20 * 44))
     for index in range(len(filenames)):
-        mfcc_whole_dataset[index] = black_box_attack_on_audio(filenames[index], 44, sigma=sigma, p=p, alpha=alpha)
+        mfcc_whole_dataset[index] = black_box_attack_on_audio_snr(filenames[index], 44, target_snr_db)
         mfcc_whole_dataset_flattened[index] = mfcc_whole_dataset[index].flatten()
     return mfcc_whole_dataset_flattened
 
@@ -165,10 +213,25 @@ if __name__ == '__main__':
     # upper_lip = get_upper_lipschitz(norms)
     # print(f"The upper-bound Lipschitz Constant for the unconstrained model: {upper_lip}")
 
+    SNRs = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]  # the values are in dB
     sigmas = np.linspace(0, 10, 10)
     alphas = np.linspace(0.01, 2, 20)
     accuracy_constrained = []
     accuracy_unconstrained = []
+
+### TODO
+    # model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=10, input_shape=(880,)
+    #                                            , loss_object=CategoricalCrossentropy())
+    #
+    # model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=10, input_shape=(880,)
+    #                                              , loss_object=CategoricalCrossentropy())
+    #
+    # attack_constrained = ImperceptibleASR(estimator=model_constrained, masker=)
+    # attack_unconstrained = ImperceptibleASR(estimator=model_unconstrained)
+    #
+    # test_adv_constrained = attack_constrained.generate(x=np.array(test_data))
+    # test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
+### TODO
 
     attack_after_standardization = input("Should the data be standardized before or after the attack? [B]/[A] ").lower()
     if attack_after_standardization == 'b':
@@ -177,7 +240,7 @@ if __name__ == '__main__':
     type_of_attack = input("Black-box or white-box attack? [B]/[W] ").lower()
 
     if type_of_attack == 'b':
-        type_of_black_box_attack = input("Type of black-box attack [S]imple/[M]ixture: ").lower()
+        type_of_black_box_attack = input("Type of black-box attack [S]imple/[M]ixture/[SNR]: ").lower()
         noise_over_audio_or_mfcc = input("Add white noise over [A]udio or [M]FCC: ").lower()
         if noise_over_audio_or_mfcc == 'a':
             sigmas = np.linspace(0, 0.1, 10)
@@ -243,6 +306,38 @@ if __name__ == '__main__':
                 ax.legend()
                 ax.set_title('Accuracy vs Alpha')
                 ax.set_xlabel('Alpha')
+                ax.set_ylabel('Accuracy')
+                plt.show()
+
+            elif type_of_black_box_attack == 'snr':
+                for snr in SNRs:
+                    # Here the data is raw audio data at the input, so there is no need for standardizing it
+                    test_data2 = black_box_attack_on_audio_dataset_snr(test_filenames, snr)
+
+                    # Now we standardize the data
+                    train_data, val_data, test_data2 = standardize_dataset(train_data, val_data, test_data2)
+
+                    predictions_constrained = model_constrained.predict(test_data2)
+                    predictions_unconstrained = model_unconstrained.predict(test_data2)
+
+                    accuracy_constrained1 = np.sum(
+                        np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1, axis=1)) / len(test_label1)
+                    accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
+                    print("Accuracy on black-box attack test examples: {}%".format(accuracy_constrained1 * 100))
+
+                    accuracy_unconstrained1 = np.sum(
+                        np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
+                        test_label1)
+                    accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
+                    print("Accuracy on black-box attack test examples unconstrained: {}%".format(
+                        accuracy_unconstrained1 * 100))
+
+                fig, ax = plt.subplots()
+                ax.plot(alphas, accuracy_constrained, color='r', label='Constrained Model')
+                ax.plot(alphas, accuracy_unconstrained, color='b', label='Unconstrained model')
+                ax.legend()
+                ax.set_title('Accuracy vs SNR')
+                ax.set_xlabel('SNR')
                 ax.set_ylabel('Accuracy')
                 plt.show()
 
@@ -349,7 +444,7 @@ if __name__ == '__main__':
         plt.show()
 
         ### Add carlini method to white box attacks from hidden commands paper
-        ### TODO: Add gaussian noise over audio and (as putea sa iau inregistrari random, adica nu cele din setul de test? NU)
+        ### Add gaussian noise over audio and (as putea sa iau inregistrari random, adica nu cele din setul de test? NU)
         # mfcc's and try these attacks, try adding noise before standardization ------> DONE
         ### p=0.1 ; 0.3, 0.4 -> grafice ca in tranpami                          ------> DONE
         ### alpha = 0.1 - 2 ; pas 0.1                                           ------> DONE
@@ -357,6 +452,9 @@ if __name__ == '__main__':
         ### TODO: sa vad daca mai pot adauga exemple in setul de date in timp ce invata
 
         #### De refacut seturile de antrenament, validare si testare, salvand fisierele audio de testare -> DONE
-        #### TODO: ca sa pot pune zgomot alb peste ele
-        #### TODO: intrab-o pe profa daca ar trebui sa normalizez audio inainte de a face MFCC?
+        #### ca sa pot pune zgomot alb peste ele
+        #### intrab-o pe profa daca ar trebui sa normalizez audio inainte de a face MFCC? (NU E NEVOIE)
         #### pentru ca range-ul de valori depinde de la audio la audio
+
+        ### TODO: Add Carlini ASR attack and Imperceptible ASR attack
+        ### Aceste atacuri au la intrare audio dar din paper-uri pare ca iau in calcul MFCC
