@@ -1,3 +1,4 @@
+# This file is used to evaluate the models built using train_constraints.py or train_google_dataset.py
 from tensorflow.keras.models import load_model
 import numpy as np
 import pathlib
@@ -30,9 +31,9 @@ if __name__ == '__main__':
     scaler1 = StandardScaler()
     mfcc_own_test = scaler1.fit_transform(mfcc_own_test)
 
-    model = load_model("bin/models_constrained/customConstraintClass_model.h5",
+    model = load_model("bin/models_constrained/model_constrained_Rho01_dropout02_moreLayers.h5")
                         #### There is a problem loading the model with customConstraint
-                       custom_objects={'customConstraint': customConstraint})
+                       # custom_objects={'customConstraint': customConstraint})
     print(model.summary())
 
     y = np.argmax(model.predict(mfcc_own_test), axis=1)
