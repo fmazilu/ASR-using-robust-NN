@@ -1,3 +1,4 @@
+# This file implements the constraints applied to the models built and trained in train_constraints.py
 import tensorflow as tf
 from tensorflow.keras.constraints import Constraint
 from tensorflow.keras.callbacks import Callback
@@ -21,7 +22,7 @@ class norm_constraint(Callback):
     def get_projection(self, w, rho):
         w = w * np.greater_equal(w, 0)
         norm = np.linalg.norm(w, ord=2)
-        return w * np.power(rho, 1/self.m) /(norm + np.spacing(1))
+        return w * np.power(rho, 1/self.m) / (norm + np.spacing(1))
 
     def on_batch_end(self, batch, logs=None):
         for l in self.model.layers:
