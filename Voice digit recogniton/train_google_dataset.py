@@ -1,3 +1,4 @@
+# This file is used to train models that are unconstrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras.models import Model
@@ -76,11 +77,13 @@ if __name__ == '__main__':
     model = get_model()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
-    model.fit(train_dataset, epochs=2000, validation_data=val_dataset, verbose=2,
+    model.fit(train_dataset, epochs=10000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
-                         EarlyStopping(monitor="val_loss", patience=600, restore_best_weights=False),
+                         EarlyStopping(monitor="val_loss", patience=3000, restore_best_weights=False),
                          ModelCheckpoint('bin/models/baseline.h5', save_best_only=True, verbose=1)])
               # class_weight=class_weight)
+    model = load_model("bin/models/baseline.h5")
+    print(model.summary())
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')
