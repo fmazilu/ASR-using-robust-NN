@@ -1,3 +1,4 @@
+# This file is used to train models that are constrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras.constraints import Constraint, NonNeg
@@ -48,7 +49,7 @@ def tensorboard_callback():
 
 
 # Callback class for monitoring the Lipschitz constant
-class lip_stats_callback(Callback): ## sa printeze si norma fiecarei ponderi in parte, min max pe fiecare pondere + google colab
+class lip_stats_callback(Callback):
     def on_epoch_begin(self, epoch, logs=None):
         lip_cst = get_lipschitz_constrained(model)
         for layer in self.model.layers:
@@ -59,22 +60,21 @@ class lip_stats_callback(Callback): ## sa printeze si norma fiecarei ponderi in 
         print(f'The Lipschitz constant on epoch {epoch} is {lip_cst}')
 
 
-## cst < 5; test_acc 85%
 def get_model():
     m = 5
     rho = 20
     inp = Input((880,))
     hdn = Dense(1024, activation='relu', kernel_constraint=NonNeg())(inp)
     hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.5)(hdn)
+    hdn = Dropout(0.1)(hdn)
 
     hdn = Dense(512, activation='relu', kernel_constraint=NonNeg())(hdn)
     hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.4)(hdn)
+    hdn = Dropout(0.1)(hdn)
 
     hdn = Dense(256, activation='relu', kernel_constraint=NonNeg())(hdn)
     hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.4)(hdn)
+    hdn = Dropout(0.1)(hdn)
 
     hdn = Dense(128, activation='relu', kernel_constraint=NonNeg())(hdn)
     hdn = BatchNormalization()(hdn)
@@ -89,27 +89,28 @@ def get_model():
 
 
 if __name__ == '__main__':
-    #### Model Training
+    # Model Training
     model = get_model()
     model.compile(optimizer='adam', loss=CategoricalCrossentropy(), metrics=['accuracy'])
     print(model.summary())
     # model.load_weights('bin/models_constrained/model_1layer.h5')
-    model.fit(train_dataset, epochs=2000, validation_data=val_dataset, verbose=2,
+    model.fit(train_dataset, epochs=10000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
-                         EarlyStopping(monitor="val_loss", patience=1000, restore_best_weights=False),
+                         EarlyStopping(monitor="val_loss", patience=6000, restore_best_weights=False),
                          # norm_constraint_FISTA(rho=5, nit=2),
                          # norm_constraint(rho=10),     ## Read more about layer indices
-                         # simple_norm_constraint(rho=10, affected_layers_indices=[5,6]),
+                         simple_norm_constraint(rho=0.1, affected_layers_indices=[]),
                          lip_stats_callback(),
-                         ModelCheckpoint('bin/models_constrained/model_test.h5',
-                                         save_best_only=True, verbose=1)]) #model_5layerFISTA_rho20_droupout
+                         ModelCheckpoint('bin/models_constrained/model_constrained_Rho01_dropout01.h5',
+                                         save_best_only=True, verbose=1)])
 
-    model = load_model("bin/models_constrained/model_test.h5")
+    model = load_model("bin/models_constrained/model_constrained_Rho01_dropout01.h5")
+    print(model.summary())
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')
 
-    #### Plotting The confusion matrix
+    # Plotting The confusion matrix
     # conf_matrix = tf.math.confusion_matrix(test_label1, y)
     # print(conf_matrix[0])
     # ax = sn.heatmap(conf_matrix)
