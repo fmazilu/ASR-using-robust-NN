@@ -1,6 +1,7 @@
 # This file is used to evaluate the models built using train_constraints.py or train_google_dataset.py
 from tensorflow.keras.models import load_model
 import numpy as np
+import librosa
 import pathlib
 from sklearn.utils import shuffle
 from extract_features_construct_dataset import get_file_names_and_labels, compute_mfcc_all_files
@@ -13,8 +14,8 @@ from sklearn.preprocessing import StandardScaler
 from train_constraints import customConstraint
 from extract_features_construct_dataset import get_norms, get_upper_lipschitz, get_lipschitz_constrained
 
-if __name__ == '__main__':
-    data_dir = pathlib.Path('splitAudioEn\\')
+def main():
+    data_dir = pathlib.Path('test_hidden_commands\\')
     save_dir = 'ownTest'
 
     # Get files
@@ -30,15 +31,18 @@ if __name__ == '__main__':
     ## Standardize data
     scaler1 = StandardScaler()
     mfcc_own_test = scaler1.fit_transform(mfcc_own_test)
-
-    model = load_model("bin/models_constrained/model_constrained_Rho01_dropout02_moreLayers.h5")
-                        #### There is a problem loading the model with customConstraint
-                       # custom_objects={'customConstraint': customConstraint})
+    choose_model = input("[B]aseline or [R]obust baseline: ").lower()
+    if choose_model == 'b':
+        model = load_model("bin/models/baseline.h5")
+    elif choose_model == 'r':
+        model = load_model("bin/models_constrained/model_constrained_Rho01_dropout01.h5")
+        #### There is a problem loading the model with customConstraint
+        # custom_objects={'customConstraint': customConstraint})
     print(model.summary())
 
     y = np.argmax(model.predict(mfcc_own_test), axis=1)
     print(y)
-    print(labels1)
+    print(f'gound truth = {labels1}')
     results = model.evaluate(mfcc_own_test, labels)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')
 
@@ -52,3 +56,5 @@ if __name__ == '__main__':
     print("Lipschitz constant for constrained model: " + str(cst))
 
 
+if __name__ == '__main__':
+    main()

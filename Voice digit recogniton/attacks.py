@@ -1,8 +1,12 @@
 # This file is used for evaluating the models' robustness to different black-box and white-box attacks
 import tensorflow as tf
 from art.attacks.evasion import FastGradientMethod, CarliniL2Method, CarliniLInfMethod, ProjectedGradientDescent
-# ImperceptibleASR, CarliniWagnerASR
+    # ImperceptibleASR, CarliniWagnerASR
+from art.attacks.evasion.imperceptible_asr.imperceptible_asr import ImperceptibleASR, PsychoacousticMasker
 from art.estimators.classification import TensorFlowV2Classifier
+from art.estimators.tensorflow import TensorFlowV2Estimator
+from art.estimators.estimator import BaseEstimator, NeuralNetworkMixin, LossGradientsMixin
+from art.estimators.speech_recognition import SpeechRecognizerMixin, TensorFlowLingvoASR
 from tensorflow.keras.losses import CategoricalCrossentropy
 from sklearn.preprocessing import StandardScaler
 import numpy as np
@@ -10,6 +14,8 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 import librosa
+import colorednoise as cn
+from AsrImperceptible import AsrImperceptibleAttack, DummyTensorFlowLingvoASR
 from Constraints import customConstraint
 # from extract_features_construct_dataset import get_lipschitz_constrained, get_upper_lipschitz, get_norms
 # from mixtgauss import add_noise
@@ -136,7 +142,7 @@ def black_box_attack_on_audio_dataset(filenames, sigma, p, alpha):
         mfcc_whole_dataset[index] = black_box_attack_on_audio(filenames[index], 44, sigma=sigma, p=p, alpha=alpha)
         mfcc_whole_dataset_flattened[index] = mfcc_whole_dataset[index].flatten()
     return mfcc_whole_dataset_flattened
-### Type one black-box attack
+# Type one black-box attack
 
 
 def mixtgauss(N, p, sigma0, sigma1):
@@ -300,13 +306,27 @@ def black_box_attack_on_audio_dataset_snr(filenames, target_snr_db):
     return mfcc_whole_dataset_flattened
 
 
+def add_pink_noise(array):
+    beta = 1  # Pink noise
+    N = array.shape[0]
+    noise = cn.powerlaw_psd_gaussian(beta, N)
+    noisy_array = array + noise
+    return noisy_array
+# TODO: continue implementation
+
+
 if __name__ == '__main__':
+
     # Loading the datasets
-    ## For the attacks we only need the test dataset, but standardizing has to be done in the same method
+    # For the attacks we only need the test dataset, but standardizing has to be done in the same method
     path = 'processed_google_dataset/'
 
     test_filenames = np.load("test_dataset_to_add_noise\\test_filenames.npy")
     test_labels = np.load("test_dataset_to_add_noise\\test_label.npy")
+    test_labels2 = []
+    for elem in test_labels:
+        test_labels2.append(str(elem))
+    test_labels2 = np.array(test_labels2)
     test_labels = to_categorical(test_labels, 10)
 
     train_data, train_label, val_data, val_label, test_data, test_label = load_npy_dataset(path)
@@ -328,22 +348,63 @@ if __name__ == '__main__':
 
     SNRs = [60, 30, 20, 15, 10, 5, 0]  # the values are in dB
     sigmas = np.linspace(0, 10, 10)
-    alphas = np.linspace(0.01, 2, 20)
+    alphas = [0.25, 0.5] #np.linspace(0.01, 2, 20)
     accuracy_constrained = []
     accuracy_unconstrained = []
 
 ### TODO
-    # model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=10, input_shape=(880,)
-    #                                            , loss_object=CategoricalCrossentropy())
-    #
-    # model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=10, input_shape=(880,)
-    #                                              , loss_object=CategoricalCrossentropy())
-    #
-    # attack_constrained = ImperceptibleASR(estimator=model_constrained, masker=)
-    # attack_unconstrained = ImperceptibleASR(estimator=model_unconstrained)
-    #
-    # test_adv_constrained = attack_constrained.generate(x=np.array(test_data))
-    # test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
+    test_filenames = test_filenames[:2]
+    audio_dataset = np.zeros((len(test_filenames), 22050))
+    sample_rate = 22050
+    for index, file in enumerate(test_filenames):
+        audio, sample_rate = librosa.load(file)
+        audio = np.array(audio)
+        if audio.shape[0] > 22050:
+            audio = audio[:22050]
+        else:
+            audio = np.pad(audio, (0, 22050 - audio.shape[0]))
+        audio_dataset[index] = audio
+
+
+    # model_constrained = TensorFlowLingvoASR(model=model_constrained)
+    # model_constrained = BaseEstimator(model=model_constrained)
+    # nnm = NeuralNetworkMixin(channels_first=True, model_constrained)
+    # lgm = LossGradientsMixin()
+    # model_constrained = DummyTensorFlowLingvoASR(model=model_constrained)
+
+    model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=10, input_shape=(880,)
+                                               , loss_object=CategoricalCrossentropy())
+
+    model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=10, input_shape=(880,)
+                                                 , loss_object=CategoricalCrossentropy())
+
+    attack_constrained = AsrImperceptibleAttack(estimator=model_constrained,
+                                                masker=PsychoacousticMasker(sample_rate=sample_rate),
+                                                max_iter_1=1, max_iter_2=1, num_iter_decrease_eps=1, eps=0.1)
+    attack_unconstrained = AsrImperceptibleAttack(estimator=model_constrained,
+                                                  masker=PsychoacousticMasker(sample_rate=sample_rate),
+                                                  max_iter_1=1, max_iter_2=1, num_iter_decrease_eps=1)
+
+    test_adv_constrained = attack_constrained.generate(x=np.array(audio_dataset[:2]), y=test_labels[:2])
+    test_adv_unconstrained = attack_unconstrained.generate(x=np.array(audio_dataset[:2]), y=test_labels[:2])
+
+    train_data, val_data, test_adv_constrained = standardize_dataset(train_data, val_data,
+                                                                     test_adv_constrained)
+    train_data, val_data, test_adv_unconstrained = standardize_dataset(train_data, val_data,
+                                                                       test_adv_unconstrained)
+
+    predictions_constrained = model_constrained.predict(test_adv_constrained)
+    predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
+
+    accuracy_constrained1 = np.sum(np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
+        test_label1)
+    accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
+    print("Accuracy on adversarial test examples: {}%".format(accuracy_constrained1 * 100))
+
+    accuracy_unconstrained1 = np.sum(np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
+        test_label1)
+    accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
+    print("Accuracy on adversarial test examples unconstrained: {}%".format(accuracy_unconstrained1 * 100))
 ### TODO
 
     attack_after_standardization = input("Should the data be standardized before or after the attack? [B]/[A] ").lower()
@@ -701,3 +762,6 @@ if __name__ == '__main__':
 
         ### TODO: Add Carlini ASR attack and Imperceptible ASR attack
         ### Aceste atacuri au la intrare audio dar din paper-uri pare ca iau in calcul MFCC
+
+        ### TODO: Pink Noise
+        ### TODO: Use WER(Word error rate) in loc de accuracy

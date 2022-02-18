@@ -45,19 +45,19 @@ def add_noise(x, p, alpha):
     return x_noisy
 
 
-# # plot the noise
-# N = 100
-# p = 0.01
-# sigma0 = 1
-# sigma1 = 10
-#
-# x = mixtgauss(N, p, sigma0, sigma1)
-# print(x.shape)
-#
-# x2 = np.random.randn(N, 1)
-# # print(x2)
-# plt.plot(x2, 'r', x, 'g')
-# plt.show()
+# plot the noise
+N = 100
+p = 0.01
+sigma0 = 1
+sigma1 = 10
+
+x = mixtgauss(N, p, sigma0, sigma1)
+print(x.shape)
+
+x2 = np.random.randn(N, 1)
+# print(x2)
+plt.plot(x2, 'r', x, 'g')
+plt.show()
 
 
 
