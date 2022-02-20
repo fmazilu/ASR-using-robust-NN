@@ -1,27 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="740ff737-f09f-4fe1-8c20-538299a80d54" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/Speaker recognition.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/extract_features_construct_dataset.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Speaker recognition/train_no_constraints.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/Voice digit recogniton.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/Voice digit recogniton.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Constraints.py" beforeDir="false" afterPath="$PROJECT_DIR$/Constraints.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Findings google data set.docx" beforeDir="false" afterPath="$PROJECT_DIR$/Findings google data set.docx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extract_features_construct_dataset.py" beforeDir="false" afterPath="$PROJECT_DIR$/extract_features_construct_dataset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/predict.py" beforeDir="false" afterPath="$PROJECT_DIR$/predict.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/train_constraints.py" beforeDir="false" afterPath="$PROJECT_DIR$/train_constraints.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/train_google_dataset.py" beforeDir="false" afterPath="$PROJECT_DIR$/train_google_dataset.py" afterDir="false" />
-    </list>
+    <list default="true" id="740ff737-f09f-4fe1-8c20-538299a80d54" name="Default Changelist" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
