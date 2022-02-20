@@ -1,11 +1,11 @@
 # This file is used to train models that are unconstrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
+from keras.models import Model
+from keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
-from tensorflow.keras.models import load_model
+from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+from keras.models import load_model
 import datetime
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -72,7 +72,7 @@ def get_model():
     return model
 
 
-if __name__ == '__main__':
+def main():
     #### Model Training
     model = get_model()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
@@ -80,18 +80,21 @@ if __name__ == '__main__':
     model.fit(train_dataset, epochs=10000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
                          EarlyStopping(monitor="val_loss", patience=3000, restore_best_weights=False),
-                         ModelCheckpoint('bin/models/baseline.h5', save_best_only=True, verbose=1)])
+                         ModelCheckpoint('bin/models/TEST.h5', save_best_only=True, verbose=1)])
               # class_weight=class_weight)
-    model = load_model("bin/models/baseline.h5")
-    print(model.summary())
+    model = load_model("bin/models/TEST.h5")    print(model.summary())
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')
 
-    #### Plotting The confusion matrix
+    # Plotting The confusion matrix
     conf_matrix = tf.math.confusion_matrix(test_label1, y)
     print(conf_matrix)
     ax = sn.heatmap(conf_matrix)
     ax.legend()
     ax.set_title("Confusion Matrix")
     plt.show()
+
+
+if __name__ == '__main__':
+    main()

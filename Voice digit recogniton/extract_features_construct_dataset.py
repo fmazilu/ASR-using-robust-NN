@@ -106,6 +106,7 @@ def plot_spectrogram(spectrogram, ax):
     Y = range(height)
     ax.pcolormesh(X, Y, log_spec)
 
+
 # Returns file names and labels of dataset
 def get_file_names_and_labels(file_path):
 ### Gets dataset

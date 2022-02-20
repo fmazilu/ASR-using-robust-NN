@@ -8,3 +8,6 @@ Voice digit recogniton/bin/models_constrained/model_Dropout08_moreLayers.h5
 Voice digit recogniton/splitAudio/
 Voice digit recogniton/florin.mp3
 *.npy
+*.wav
+*.h5
+*.v2

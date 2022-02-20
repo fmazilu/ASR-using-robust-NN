@@ -48,7 +48,7 @@ class customConstraint(Constraint):  #### De vazut API
         return {'rho': self.rho}
 
 
-# Constraint callback class
+# Constraint callback class - performance is pretty poor, no GPU usage
 class norm_constraint_FISTA(Callback):
     def __init__(self, rho, nit):
         super(Callback, self).__init__()
@@ -57,7 +57,6 @@ class norm_constraint_FISTA(Callback):
         self.nit = nit
         self.rho = self.rho + 5
 
-
     def get_w_list(self):
         w_list = []
         for l in self.model.layers:
@@ -65,7 +64,6 @@ class norm_constraint_FISTA(Callback):
                 w = l.get_weights()[0]
                 w_list.append(w)
         return w_list
-
 
     def Constraint_Fista(self, w, Y0, A, B, nit, rho):
         Y = Y0
@@ -133,6 +131,7 @@ class norm_constraint_FISTA(Callback):
                 l.set_weights([w_new.T, b])
 
 
+# Simple constraint
 class simple_norm_constraint(Callback):
     def __init__(self, rho, affected_layers_indices):
         super(Callback, self).__init__()
@@ -182,7 +181,7 @@ class simple_norm_constraint(Callback):
             for l in self.model.layers:
                 if 'dense' in l.name:
                     w = l.get_weights()[0]
-                    print(np.all(w < 0))  # To see if all components are non-negative
+                    # print(np.all(w < 0))  # To see if all components are non-negative
                     b = l.get_weights()[1]
                     w_new = self.get_projection(w)
                     l.set_weights([w_new, b])

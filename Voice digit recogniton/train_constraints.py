@@ -1,13 +1,13 @@
 # This file is used to train models that are constrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
-from tensorflow.keras.constraints import Constraint, NonNeg
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
+from keras.constraints import Constraint, NonNeg
+from keras.models import Model
+from keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
-from tensorflow.keras.models import load_model
-from tensorflow.keras.losses import CategoricalCrossentropy
+from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
+from keras.models import load_model
+from keras.losses import CategoricalCrossentropy
 import datetime
 from sklearn.preprocessing import StandardScaler
 from extract_features_construct_dataset import get_lipschitz_constrained
@@ -101,10 +101,10 @@ if __name__ == '__main__':
                          # norm_constraint(rho=10),     ## Read more about layer indices
                          simple_norm_constraint(rho=0.1, affected_layers_indices=[]),
                          lip_stats_callback(),
-                         ModelCheckpoint('bin/models_constrained/model_constrained_Rho01_dropout01.h5',
+                         ModelCheckpoint('bin/models_constrained/TEST.h5',
                                          save_best_only=True, verbose=1)])
 
-    model = load_model("bin/models_constrained/model_constrained_Rho01_dropout01.h5")
+    model = load_model("bin/models_constrained/TEST.h5")
     print(model.summary())
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
