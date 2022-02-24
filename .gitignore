@@ -15,3 +15,15 @@ Voice digit recogniton/florin.mp3
 *.FLORIN
 *.FLORIN
 Speaker recognition/logs/log_constrained20220221-112543/events.out.tfevents.1645435552.FLORIN
+*.pb
+Speaker recognition/logs/
+Speaker recognition/dataset/
+Speaker recognition/bin/
+Speaker recognition/processed_google_dataset/
+Speaker recognition/test_dataset_to_add_noise/
+Speaker recognition/.idea/
+Speaker recognition/__pycache__/
+Voice digit recogniton/processed_google_dataset/
+Voice digit recogniton/test_dataset_to_add_noise/
+Voice digit recogniton/.idea/
+Voice digit recogniton/__pycache__/
