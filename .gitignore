@@ -30,3 +30,7 @@ Voice digit recogniton/__pycache__/
 Voice digit recogniton\__pycache__\
 *.pyc
 *.xml
+*.xml
+*.pyc
+Voice digit recogniton/__pycache__/extract_features_construct_dataset.cpython-39.pyc
+Voice digit recogniton/.idea/workspace.xml
