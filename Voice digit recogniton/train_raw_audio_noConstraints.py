@@ -1,13 +1,13 @@
 # This file is used to train models that are unconstrained using Google's Speech Commands Data Set
-import keras.utils.data_utils
 import tensorflow as tf
 import numpy as np
+from tensorflow.keras.utils import Sequence
 import librosa
-from keras.models import Model
-from keras.layers import Dense, BatchNormalization, Dropout, Input
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, Flatten, Conv1D
 from tensorflow.keras.utils import to_categorical
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
-from keras.models import load_model
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+from tensorflow.keras.models import load_model
 import datetime
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -40,7 +40,7 @@ def load_dataset(filenames):
     return dataset
 
 
-class generator(keras.utils.data_utils.Sequence):
+class generator(Sequence):
     def __init__(self, filenames, labels, batch_size):
         self.filenames = filenames
         self.labels = labels
@@ -68,7 +68,7 @@ class generator(keras.utils.data_utils.Sequence):
         scaler1 = StandardScaler()
         dataset = scaler1.fit_transform(dataset)
 
-        return dataset, np.array(batch_y)
+        return np.expand_dims(dataset, axis=2), np.array(batch_y)
 
 
 def tensorboard_callback():
@@ -78,18 +78,28 @@ def tensorboard_callback():
 
 
 def get_model():
-    inp = Input((22050,))
-    hdn = Dense(4096, activation='relu')(inp)
-    hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.8)(hdn)
+    inp = Input((22050, 1), batch_size=64)
+    # TODO:
+    # primul layer sa fie conv 1D sau RNN LSTM - alt calcul constanta lipschitz
+    # Redactat licenta:
+    # introducere + experimente la final
+    # teorie ML (generala) + teorie procesare audio
+    # capitol learning w/ constraints in ASR
+    # despre semnal vocal (1)
+    # procesare audio (2)
+    # teorie ML (generala) (3)
+    # teorie learning w/ constraints (4)
+    # scris in overleaf
+    hdn = Conv1D(1, 1024, activation='relu')(inp)
+    hdn = Flatten()(hdn)
 
     hdn = Dense(2048, activation='relu')(hdn)
     hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.6)(hdn)
+    hdn = Dropout(0.7)(hdn)
 
     hdn = Dense(1024, activation='relu')(hdn)
     hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.6)(hdn)
+    hdn = Dropout(0.7)(hdn)
 
     hdn = Dense(512, activation='relu')(hdn)
     hdn = BatchNormalization()(hdn)
@@ -113,7 +123,7 @@ def main():
     data_dir = pathlib.Path('data\\')
     filenames, labels = get_file_names_and_labels(data_dir)
     filenames, labels = shuffle(filenames, labels)
-    print("1")
+    # print("1")
 
     filenames_train = filenames[:int(int(len(filenames)) * 0.7)]
     filenames_dev = filenames[int(int(len(filenames)) * 0.7): int(int(len(filenames)) * 0.9)]
@@ -124,6 +134,8 @@ def main():
     labels_test1 = to_categorical(labels_test, 10)
     test_data = load_dataset(filenames_test)
     test_dataset = tf.data.Dataset.from_tensor_slices((test_data, labels_test))
+    # labels_test1 = np.expand_dims(labels_test1, axis=1)
+    # print(labels_test1.shape)
 
     batch_size = 64
     training_generator = generator(filenames_train, to_categorical(labels_train, 10), batch_size)
@@ -133,11 +145,12 @@ def main():
     model = get_model()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
-    model.fit_generator(generator=training_generator, steps_per_epoch=int(len(filenames_train) // batch_size), epochs=10000, validation_data=validation_generator, verbose=2,
-                        callbacks=[tensorboard_callback(),
-                        EarlyStopping(monitor="val_loss", patience=3000, restore_best_weights=False),
-                        ModelCheckpoint('bin/models/TEST.h5', save_best_only=True, verbose=1)])
-    model = load_model("bin/models/TEST.h5")
+    model.fit(training_generator, steps_per_epoch=int(len(filenames_train) // batch_size),
+              epochs=10000, validation_data=validation_generator, verbose=2,
+              callbacks=[tensorboard_callback(),
+              EarlyStopping(monitor="val_loss", patience=3000, restore_best_weights=False),
+              ModelCheckpoint('bin/models/baseline_raw_audio.h5', save_best_only=True, verbose=1)])
+    model = load_model("bin/models/baseline_raw_audio.h5")
     print(model.summary())
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, labels_test1)
