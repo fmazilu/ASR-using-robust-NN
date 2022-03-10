@@ -164,6 +164,7 @@ def get_norms(model):
             norms = np.append(norms, norm)
     return norms
 
+
 # Calculate upper-bound Lipschitz constant for unconstrained model
 def get_upper_lipschitz(norms):
     return np.prod(norms)
@@ -187,9 +188,53 @@ def get_lipschitz_constrained(model):
     return cst
 
 
+# This function loads the audio data from all the files of the dataset
+# For a file the loaded audio is of shape (1, num_samples)
+# The audio samples are then split into 1 second audio arrays, with the first second and last second of audio
+# being discarded
+# The dataset will be of shape (num_seconds, 22050), 22050 being the sampling frequency
+# This function will return an array of shape (num_seconds, mfcc_features) containing the data and
+# an array of shape (num_seconds, 1) containing the labels
+def load_audio_dataset_and_labels(filenames, labels):
+    global maximum
+    split_audio = []
+    mfcc_features = []
+    local_labels = []
+    for i, file_path in enumerate(filenames):
+        # Get raw .wav data and sampling rate from librosa's load function
+        raw_w, sampling_rate = librosa.load(file_path, mono=True)
+        window_length = 1 * sampling_rate  # aprox 1 second of audio
+        audio_length = int(len(raw_w)/window_length)
+        # Cutting off first second and last second (actually more than one second at the end) of recording
+        raw_w = raw_w[window_length:(audio_length - 1) * window_length]
+        # update new audio length
+        audio_length = int(len(raw_w) / window_length)
+        # mfcc_features = np.array(np.zeros((audio_length, 20, 44)))
+        for index in range(audio_length):
+            # for this file append the label to the local labels variables as many times as the windows are in the audio
+            # file
+            local_labels.append(labels[i])
+            split_audio.append(raw_w[index * window_length: (index + 1) * window_length])
+
+    split_audio = np.array(split_audio, dtype=np.ndarray)
+    for j in range(split_audio.shape[0]):
+        # Obtain MFCC Features from raw data
+        mfcc_features.append(librosa.feature.mfcc(y=np.array(split_audio[j], dtype=float), sr=sampling_rate))
+
+    mfcc_features = np.array(mfcc_features, dtype=np.ndarray)
+    # print(mfcc_features.shape)
+
+    mfcc = mfcc_features.reshape(mfcc_features.shape[0], mfcc_features.shape[1] * mfcc_features.shape[2])
+    # print(mfcc.shape)
+    # print(split_audio.shape)
+    # print(len(local_labels))
+    return mfcc, np.array(local_labels)
+
+
 def main():
     data_dir = pathlib.Path('dataset\\rodigits\\')
     save_dir = 'processed_google_dataset'
+    utterance_length = 44
     # Get files
     filenames, labels = get_file_names_and_labels(data_dir)
     # print(filenames)
@@ -218,24 +263,30 @@ def main():
     # print(labels_test.shape)
     # print(digit[labels_train[34]])
 
-    # # Saving test filenames and labels
-    np.save("test_dataset_to_add_noise\\test_label", labels_test)
-    np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
-
-    # Compute MFCC for all files
-    mfcc_train = compute_mfcc_all_files(filenames_train)
-    # print(mfcc_train.shape)
-    mfcc_dev = compute_mfcc_all_files(filenames_dev)
-    # print(mfcc_dev.shape)
-    mfcc_test = compute_mfcc_all_files(filenames_test)
+    mfcc_train, labels_train = load_audio_dataset_and_labels(filenames_train, labels_train)
+    mfcc_val, labels_val = load_audio_dataset_and_labels(filenames_dev, labels_dev)
+    mfcc_test, labels_test = load_audio_dataset_and_labels(filenames_test, labels_test)
     # print(mfcc_test.shape)
+    # print(labels_test.shape)
 
-    np.save("processed_google_dataset\\train_data", mfcc_train)
-    np.save("processed_google_dataset\\train_label", labels_train)
-    np.save("processed_google_dataset\\dev_data", mfcc_dev)
-    np.save("processed_google_dataset\\dev_label", labels_dev)
-    np.save("processed_google_dataset\\test_data", mfcc_test)
-    np.save("processed_google_dataset\\test_label", labels_test)
+    # # Saving test filenames and labels
+    # np.save("test_dataset_to_add_noise\\test_label", labels_test)
+    # np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
+    #
+    # # Compute MFCC for all files
+    # mfcc_train = compute_mfcc_all_files(filenames_train)
+    # # print(mfcc_train.shape)
+    # mfcc_dev = compute_mfcc_all_files(filenames_dev)
+    # # print(mfcc_dev.shape)
+    # mfcc_test = compute_mfcc_all_files(filenames_test)
+    # # print(mfcc_test.shape)
+    #
+    np.save("RoDigits_split\\train_data", mfcc_train)
+    np.save("RoDigits_split\\train_label", labels_train)
+    np.save("RoDigits_split\\dev_data", mfcc_val)
+    np.save("RoDigits_split\\dev_label", labels_val)
+    np.save("RoDigits_split\\test_data", mfcc_test)
+    np.save("RoDigits_split\\test_label", labels_test)
 
 
 if __name__ == '__main__':

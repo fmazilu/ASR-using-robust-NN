@@ -1,7 +1,7 @@
 # This file implements the constraints applied to the models built and trained in train_constraints.py
 import tensorflow as tf
-from keras.constraints import Constraint
-from keras.callbacks import Callback
+from tensorflow.keras.constraints import Constraint
+from tensorflow.keras.callbacks import Callback
 import numpy as np
 
 
@@ -55,7 +55,7 @@ class norm_constraint_FISTA(Callback):
         self.rho = rho
         self.m = 0
         self.nit = nit
-        self.rho = self.rho + 5
+        # self.rho = self.rho + 5
 
     def get_w_list(self):
         w_list = []
@@ -82,13 +82,13 @@ class norm_constraint_FISTA(Callback):
             [u, s, v] = np.linalg.svd(T)
             criterion = np.linalg.norm(w_new - w, ord='fro')
             constraint = np.linalg.norm(s[s > rho] - rho, ord=2)
-            # print('iteration:', i + 1, 'criterion: ', criterion, 'constraint: ', constraint)
+            print('iteration:', i + 1, 'criterion: ', criterion, 'constraint: ', constraint)
             Yt = Z + gam * T
             [u1, s1, v1] = np.linalg.svd(Yt / gam, full_matrices=False)
             s1 = np.clip(s1, 0, rho)
             Y = Yt - gam * np.dot(u1 * s1, v1)
             if (criterion < 30 and constraint < 0.01):
-                # print(i)
+                print(i)
                 return w_new
         return w_new
 
@@ -121,8 +121,8 @@ class norm_constraint_FISTA(Callback):
         return w_new
 
     def on_batch_end(self, batch, logs=None):
-        if self.rho > 2:
-            self.rho = self.rho - 0.0001
+        # if self.rho > 2:
+        #     self.rho = self.rho - 0.0001
         for l in self.model.layers:
             if 'dense' in l.name:
                 w = l.get_weights()[0]

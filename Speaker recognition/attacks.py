@@ -7,11 +7,11 @@ from art.estimators.classification import TensorFlowV2Classifier
 from art.estimators.tensorflow import TensorFlowV2Estimator
 from art.estimators.estimator import BaseEstimator, NeuralNetworkMixin, LossGradientsMixin
 from art.estimators.speech_recognition import SpeechRecognizerMixin, TensorFlowLingvoASR
-from keras.losses import CategoricalCrossentropy
+from tensorflow.keras.losses import CategoricalCrossentropy
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from tensorflow.keras.utils import to_categorical
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 import librosa
 import colorednoise as cn
@@ -32,13 +32,14 @@ def load_npy_dataset(path):
     output:
     train_data, train_label, val_data, val_label, test_data, test_label: The loaded data sets and labels
     """
-    train_data = np.load(path + "train_data.npy")
+    train_data = np.array(np.load(path + "train_data.npy", allow_pickle=True))
     train_label = np.load(path + "train_label.npy")
     # train_label = to_categorical(train_label, 10)
     val_label = np.load(path + "dev_label.npy")
     # val_label = to_categorical(val_label, 10)
-    val_data = np.load(path + "dev_data.npy")
-    test_data = np.load(path + "test_data.npy")
+    val_data = np.load(path + "dev_data.npy", allow_pickle=True)
+    test_data = np.load(path + "test_data.npy", allow_pickle=True)
+    test_data = np.asarray(test_data).astype('float32')
     test_label = np.load(path + "test_label.npy")
     # test_label = to_categorical(test_label1, 10)
 
@@ -69,7 +70,7 @@ def standardize_dataset(train_data, val_data, test_data):
     return train_data, val_data, test_data
 
 
-### Type one black-box attack
+# Type one black-box attack
 def add_white_noise(array, sigma):
     """
     Adds white gaussian noise on an array with mean = 0 and std dev = sigma
@@ -315,11 +316,10 @@ def add_pink_noise(array):
 # TODO: continue implementation
 
 
-if __name__ == '__main__':
-
+def main():
     # Loading the datasets
     # For the attacks we only need the test dataset, but standardizing has to be done in the same method
-    path = 'processed_google_dataset/'
+    path = 'RoDigits_split/'
 
     test_filenames = np.load("test_dataset_to_add_noise\\test_filenames.npy")
     test_labels = np.load("test_dataset_to_add_noise\\test_label.npy")
@@ -332,9 +332,9 @@ if __name__ == '__main__':
     train_data, train_label, val_data, val_label, test_data, test_label = load_npy_dataset(path)
     test_label1 = to_categorical(test_label, 20)
 
-    model_constrained = load_model("bin/models_constrained/model_constrained_Rho1.h5")
+    model_constrained = load_model("bin/models_constrained/model_constrained_Rho1_split.h5")
                                    # custom_objects={'customConstraint': customConstraint})
-    model_unconstrained = load_model("bin/models/baseline.h5")
+    model_unconstrained = load_model("bin/models/baseline_split.h5")
 
     # TODO: Move these commented lines to another script
     # lip_cst = get_lipschitz_constrained(model_constrained)
@@ -527,16 +527,16 @@ if __name__ == '__main__':
             eps = np.linspace(0.01, 0.3, 10)
             if attack_after_standardization == 'a':
                 eps = np.linspace(1, 10, 10)
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(10000,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(10000,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
                                                          , loss_object=CategoricalCrossentropy())
             for item in eps:
                 attack_constrained = FastGradientMethod(estimator=model_constrained, eps=item)
                 attack_unconstrained = FastGradientMethod(estimator=model_unconstrained, eps=item)
 
-                test_adv_constrained = attack_constrained.generate(x=np.array(test_data))
+                test_adv_constrained = attack_constrained.generate(x=test_data)
                 test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
 
                 if attack_after_standardization == 'a':
@@ -569,10 +569,10 @@ if __name__ == '__main__':
             eps = np.linspace(0.1, 1, 10)
             if attack_after_standardization == 'a':
                 eps = np.linspace(0.1, 0.3, 10)
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(10000,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(10000,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
                                                          , loss_object=CategoricalCrossentropy())
             for item in eps:
                 attack_constrained = CarliniLInfMethod(classifier=model_constrained, confidence=item)
@@ -612,10 +612,10 @@ if __name__ == '__main__':
         elif type_of_white_box_attack == 'l2':
             item = 0.1
 
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(10000,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(10000,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
                                                          , loss_object=CategoricalCrossentropy())
 
             attack_constrained = CarliniL2Method(classifier=model_constrained, confidence=item)
@@ -648,10 +648,10 @@ if __name__ == '__main__':
         elif type_of_white_box_attack == 'p':
             eps = np.linspace(0.1, 10, 10)
 
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(10000,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(10000,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
                                                          , loss_object=CategoricalCrossentropy())
 
             for item in eps:
@@ -691,6 +691,9 @@ if __name__ == '__main__':
             ax.set_ylabel('Accuracy')
             plt.show()
 
+
+if __name__ == '__main__':
+    main()
 
         ### Add carlini method to white box attacks from hidden commands paper
         ### Add gaussian noise over audio and (as putea sa iau inregistrari random, adica nu cele din setul de test? NU)

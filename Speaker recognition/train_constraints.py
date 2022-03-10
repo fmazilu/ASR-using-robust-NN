@@ -1,27 +1,27 @@
 # This file is used to train models that are constrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
-from keras.constraints import Constraint, NonNeg
-from keras.models import Model
-from keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
+from tensorflow.keras.constraints import Constraint, NonNeg
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
 from tensorflow.keras.utils import to_categorical
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
-from keras.models import load_model
-from keras.losses import CategoricalCrossentropy
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
+from tensorflow.keras.models import load_model
+from tensorflow.keras.losses import CategoricalCrossentropy
 import datetime
 from sklearn.preprocessing import StandardScaler
 from extract_features_construct_dataset import get_lipschitz_constrained
 from Constraints import customConstraint, norm_constraint, norm_constraint_FISTA, simple_norm_constraint
 
 # Loading the datasets
-path = 'processed_google_dataset/'
-train_data = np.load(path + "train_data.npy")
+path = 'RoDigits_split/'
+train_data = np.load(path + "train_data.npy", allow_pickle=True)
 train_label = np.load(path + "train_label.npy")
 train_label = to_categorical(train_label, 20)
 val_label = np.load(path + "dev_label.npy")
 val_label = to_categorical(val_label, 20)
-val_data = np.load(path + "dev_data.npy")
-test_data = np.load(path + "test_data.npy")
+val_data = np.load(path + "dev_data.npy", allow_pickle=True)
+test_data = np.load(path + "test_data.npy", allow_pickle=True)
 test_label1 = np.load(path + "test_label.npy")
 test_label = to_categorical(test_label1, 20)
 
@@ -63,18 +63,18 @@ class lip_stats_callback(Callback):
 def get_model():
     m = 5
     rho = 20
-    inp = Input((10000,))
+    inp = Input((880,))
     hdn = Dense(1024, activation='relu', kernel_constraint=NonNeg())(inp)
     hdn = BatchNormalization()(hdn)
-    # hdn = Dropout(0.1)(hdn)
+    hdn = Dropout(0.1)(hdn)
 
     hdn = Dense(512, activation='relu', kernel_constraint=NonNeg())(hdn)
     hdn = BatchNormalization()(hdn)
-    # hdn = Dropout(0.1)(hdn)
+    hdn = Dropout(0.1)(hdn)
 
     hdn = Dense(256, activation='relu', kernel_constraint=NonNeg())(hdn)
     hdn = BatchNormalization()(hdn)
-    # hdn = Dropout(0.1)(hdn)
+    hdn = Dropout(0.1)(hdn)
 
     hdn = Dense(128, activation='relu', kernel_constraint=NonNeg())(hdn)
     hdn = BatchNormalization()(hdn)
@@ -95,19 +95,19 @@ if __name__ == '__main__':
     print(model.summary())
     # model.load_weights('bin/models_constrained/model_1layer.h5')
     model.fit(train_dataset, epochs=10000, validation_data=val_dataset, verbose=2,
-              callbacks=[tensorboard_callback(),
-                         EarlyStopping(monitor="val_loss", patience=600, restore_best_weights=False),
-                         # norm_constraint_FISTA(rho=5, nit=2),
-                         # norm_constraint(rho=10),     ## Read more about layer indices
-                         simple_norm_constraint(rho=0.1, affected_layers_indices=[]),
+              callbacks=[ #  tensorboard_callback(),
+                         EarlyStopping(monitor="val_loss", patience=2000, restore_best_weights=False),
+                         # norm_constraint_FISTA(rho=2, nit=2),
+                         # norm_constraint(rho=10),
+                         simple_norm_constraint(rho=1, affected_layers_indices=[]),
                          # lip_stats_callback(),
-                         ModelCheckpoint('bin/models_constrained/model_constrained_Rho01.h5',
+                         ModelCheckpoint('bin/models_constrained/model_constrained_Rho1_split.h5',
                                          save_best_only=True, verbose=1)])
 
-    model = load_model("bin/models_constrained/model_constrained_Rho01.h5")
+    model = load_model("bin/models_constrained/model_constrained_Rho1_split.h5")
     print(model.summary())
     lip = get_lipschitz_constrained(model)
-    print(f"Lipschitz constant for non-constrained model: {lip}")
+    print(f"Lipschitz constant for constrained model: {lip}")
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')
