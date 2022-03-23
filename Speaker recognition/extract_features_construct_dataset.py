@@ -172,11 +172,22 @@ def get_upper_lipschitz(norms):
 
 def get_lipschitz_constrained(model):
     cst = []
+    batch_layers = []
     w_list = []
+    correction_factors = []
+    correction_factor = 1
     for x in model.layers:
+        if "batch" in x.name:
+            batch_layers.append(x)
         if 'dense' in x.name:
             w = x.get_weights()[0]
             w_list.append(w)
+    for layer in batch_layers:
+        gamma = layer.get_weights()[0]
+        variance = layer.get_weights()[3]
+        correction_factors.append(np.sqrt(variance)/gamma)
+    if correction_factors != []:
+        correction_factor = np.prod([np.max(c) for c in correction_factors])
 
     for index in reversed(range(len(w_list))):
         if cst == []:
@@ -185,6 +196,7 @@ def get_lipschitz_constrained(model):
             cst = np.matmul(cst, np.array(w_list[index]).transpose())
 
     cst = np.linalg.norm(cst, ord=2)
+    cst = cst * correction_factor
     return cst
 
 
@@ -218,8 +230,9 @@ def load_audio_dataset_and_labels(filenames, labels):
 
     split_audio = np.array(split_audio, dtype=np.ndarray)
     for j in range(split_audio.shape[0]):
-        # Obtain MFCC Features from raw data
-        mfcc_features.append(librosa.feature.mfcc(y=np.array(split_audio[j], dtype=float), sr=sampling_rate))
+        # Obtain MFCC Features from raw data, window length = 441 for 20ms at 22kHz sampling rate
+        mfcc_features.append(librosa.feature.mfcc(y=np.array(split_audio[j], dtype=float), sr=sampling_rate,
+                                                  win_length=441, n_fft=441, hop_length=220))
 
     mfcc_features = np.array(mfcc_features, dtype=np.ndarray)
     # print(mfcc_features.shape)
@@ -275,18 +288,18 @@ def main():
     #
     # # Compute MFCC for all files
     # mfcc_train = compute_mfcc_all_files(filenames_train)
-    # # print(mfcc_train.shape)
+    print(mfcc_train.shape)
     # mfcc_dev = compute_mfcc_all_files(filenames_dev)
-    # # print(mfcc_dev.shape)
+    print(mfcc_val.shape)
     # mfcc_test = compute_mfcc_all_files(filenames_test)
-    # # print(mfcc_test.shape)
+    print(mfcc_test.shape)
     #
-    np.save("RoDigits_split\\train_data", mfcc_train)
-    np.save("RoDigits_split\\train_label", labels_train)
-    np.save("RoDigits_split\\dev_data", mfcc_val)
-    np.save("RoDigits_split\\dev_label", labels_val)
-    np.save("RoDigits_split\\test_data", mfcc_test)
-    np.save("RoDigits_split\\test_label", labels_test)
+    np.save("RoDigits_splitV2\\train_data", mfcc_train)
+    np.save("RoDigits_splitV2\\train_label", labels_train)
+    np.save("RoDigits_splitV2\\dev_data", mfcc_val)
+    np.save("RoDigits_splitV2\\dev_label", labels_val)
+    np.save("RoDigits_splitV2\\test_data", mfcc_test)
+    np.save("RoDigits_splitV2\\test_label", labels_test)
 
 
 if __name__ == '__main__':
