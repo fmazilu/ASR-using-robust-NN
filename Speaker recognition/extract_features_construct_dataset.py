@@ -188,6 +188,7 @@ def get_lipschitz_constrained(model):
         correction_factors.append(np.sqrt(variance)/gamma)
     if correction_factors != []:
         correction_factor = np.prod([np.max(c) for c in correction_factors])
+    # print([1/np.max(c) for c in correction_factors])
 
     for index in reversed(range(len(w_list))):
         if cst == []:
@@ -196,7 +197,7 @@ def get_lipschitz_constrained(model):
             cst = np.matmul(cst, np.array(w_list[index]).transpose())
 
     cst = np.linalg.norm(cst, ord=2)
-    cst = cst * correction_factor
+    cst = cst / correction_factor
     return cst
 
 

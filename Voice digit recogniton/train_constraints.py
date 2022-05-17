@@ -1,13 +1,13 @@
 # This file is used to train models that are constrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
-from keras.constraints import Constraint, NonNeg
-from keras.models import Model
-from keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
+from tensorflow.keras.constraints import Constraint, NonNeg
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
 from tensorflow.keras.utils import to_categorical
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
-from keras.models import load_model
-from keras.losses import CategoricalCrossentropy
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
+from tensorflow.keras.models import load_model
+from tensorflow.keras.losses import CategoricalCrossentropy
 import datetime
 from sklearn.preprocessing import StandardScaler
 from extract_features_construct_dataset import get_lipschitz_constrained

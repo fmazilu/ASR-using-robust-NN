@@ -13,16 +13,20 @@ from tensorflow.keras.utils import to_categorical
 from IPython import display
 from sklearn.utils import shuffle
 
-
+maxim = 0
 #
 # EXTRACT MFCC FEATURES
 #
 def extract_features(file_path, utterance_length):
+    global maxim
     # Get raw .wav data and sampling rate from librosa's load function
     raw_w, sampling_rate = librosa.load(file_path, mono=True)
+    # print(raw_w.shape)
 
     # Obtain MFCC Features from raw data
-    mfcc_features = librosa.feature.mfcc(raw_w, sampling_rate)
+    mfcc_features = librosa.feature.mfcc(y=raw_w, sr=sampling_rate)
+    if mfcc_features.shape[1] > maxim:
+        maxim = mfcc_features.shape[1]
     if mfcc_features.shape[1] > utterance_length:
         mfcc_features = mfcc_features[:, 0:utterance_length]
     else:
@@ -155,6 +159,7 @@ def get_norms(model):
             norms = np.append(norms, norm)
     return norms
 
+
 # Calculate upper-bound Lipschitz constant for unconstrained model
 def get_upper_lipschitz(norms):
     return np.prod(norms)
@@ -178,7 +183,6 @@ def get_lipschitz_constrained(model):
     return cst
 
 
-
 if __name__ == '__main__':
 
     data_dir = pathlib.Path('data\\')
@@ -187,13 +191,13 @@ if __name__ == '__main__':
     filenames, labels = get_file_names_and_labels(data_dir)
 
     raw_w, sampling_rate = librosa.load('data\\four\\0cd323ec_nohash_2.wav', mono=True)
-    mfcc1 = extract_features('data\\four\\0cd323ec_nohash_2.wav', 44)
-    mfcc2 = librosa.feature.mfcc(raw_w, sampling_rate)
-    print(mfcc1.shape)
-    print(mfcc2.shape)
-    mfcc2 = np.array(mfcc2).flatten()
-    print(mfcc2.shape)
-    print(max(abs(raw_w)))
+    # mfcc1 = extract_features('data\\four\\0cd323ec_nohash_2.wav', 44)
+    # mfcc2 = librosa.feature.mfcc(raw_w, sampling_rate)
+    # print(mfcc1.shape)
+    # print(mfcc2.shape)
+    # mfcc2 = np.array(mfcc2).flatten()
+    # print(mfcc2.shape)
+    # print(max(abs(raw_w)))
 
     # shuffle files and labels at the same time
     # filenames, labels = shuffle(filenames, labels)
@@ -223,6 +227,7 @@ if __name__ == '__main__':
     # # Compute MFCC for all files
     # mfcc_train = compute_mfcc_all_files(filenames_train)
     # print(mfcc_train.shape)
+    # print(maxim)
     # mfcc_dev = compute_mfcc_all_files(filenames_dev)
     # print(mfcc_dev.shape)
     # mfcc_test = compute_mfcc_all_files(filenames_test)

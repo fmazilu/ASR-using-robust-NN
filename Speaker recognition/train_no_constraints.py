@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import seaborn as sn
 
 # Loading the datasets
-path = 'RoDigits_split/'
+path = 'RoDigits_splitV2/'
 train_data = np.load(path + "train_data.npy", allow_pickle=True)
 train_label = np.load(path + "train_label.npy")
 train_label = to_categorical(train_label, 20)
@@ -50,24 +50,24 @@ def tensorboard_callback():
 
 
 def get_model():
-    inp = Input((880,))
+    inp = Input((2020,))
     hdn = Dense(1024, activation='relu')(inp)
-    hdn = BatchNormalization()(hdn)
+    # hdn = BatchNormalization()(hdn)
     # hdn = Dropout(0.5)(hdn)
 
     hdn = Dense(512, activation='relu')(hdn)
-    hdn = BatchNormalization()(hdn)
+    # hdn = BatchNormalization()(hdn)
     # hdn = Dropout(0.4)(hdn)
 
     hdn = Dense(256, activation='relu')(hdn)
-    hdn = BatchNormalization()(hdn)
+    # hdn = BatchNormalization()(hdn)
     # hdn = Dropout(0.4)(hdn)
 
     hdn = Dense(128, activation='relu')(hdn)
-    hdn = BatchNormalization()(hdn)
+    # hdn = BatchNormalization()(hdn)
 
     hdn = Dense(64, activation='relu')(hdn)
-    hdn = BatchNormalization()(hdn)
+    # hdn = BatchNormalization()(hdn)
 
     out = Dense(20, activation='softmax')(hdn)
 
@@ -83,8 +83,8 @@ def main():
     model.fit(train_dataset, epochs=10000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
                          EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=False),
-                         ModelCheckpoint('bin/models/baseline_split.h5', save_best_only=True, verbose=1)])
-    model = load_model("bin/models/baseline_split.h5")
+                         ModelCheckpoint('bin/models/baseline_splitV2.h5', save_best_only=True, verbose=1)])
+    model = load_model("bin/models/baseline_splitV2.h5")
     print(model.summary())
     model_norms = get_norms(model)
     lip = get_upper_lipschitz(model_norms)

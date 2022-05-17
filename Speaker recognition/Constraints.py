@@ -143,6 +143,8 @@ class simple_norm_constraint(Callback):
     def get_w_list(self):
         w_list = []
         for l in self.model.layers:
+            # if "batch" in l.name:
+            #     self.batch_layers.append(l)
             if 'dense' in l.name:
                 w = l.get_weights()[0]
                 # print(f"w inainte de modificare {w}")
@@ -177,7 +179,14 @@ class simple_norm_constraint(Callback):
 
     def on_batch_end(self, batch, logs=None):
         layer_list = self.get_layer_list()
+        correction_factors = []
         if self.affected_layers_indices == []:
+            # for layer in self.batch_layers:
+            #     gamma = layer.get_weights()[0]
+            #     variance = layer.get_weights()[3]
+            #     correction_factors.append(np.sqrt(variance)/gamma)
+            #
+            # correction_factor = np.prod([np.max(c) for c in correction_factors])
             for l in self.model.layers:
                 if 'dense' in l.name:
                     w = l.get_weights()[0]

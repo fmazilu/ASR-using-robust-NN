@@ -7,11 +7,11 @@ from art.estimators.classification import TensorFlowV2Classifier
 from art.estimators.tensorflow import TensorFlowV2Estimator
 from art.estimators.estimator import BaseEstimator, NeuralNetworkMixin, LossGradientsMixin
 from art.estimators.speech_recognition import SpeechRecognizerMixin, TensorFlowLingvoASR
-from keras.losses import CategoricalCrossentropy
+from tensorflow.keras.losses import CategoricalCrossentropy
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from tensorflow.keras.utils import to_categorical
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 import librosa
 import colorednoise as cn

@@ -1,11 +1,11 @@
 # This file is used to train models that are unconstrained using Google's Speech Commands Data Set
 import tensorflow as tf
 import numpy as np
-from keras.models import Model
-from keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Input, LSTM, Conv1D
 from tensorflow.keras.utils import to_categorical
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
-from keras.models import load_model
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+from tensorflow.keras.models import load_model
 import datetime
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -36,8 +36,8 @@ train_dataset = tf.data.Dataset.from_tensor_slices((train_data, train_label))
 val_dataset = tf.data.Dataset.from_tensor_slices((val_data, val_label))
 test_dataset = tf.data.Dataset.from_tensor_slices((test_data, test_label))
 
-train_dataset = train_dataset.shuffle(880, reshuffle_each_iteration=False).batch(64)
-val_dataset = val_dataset.shuffle(880, reshuffle_each_iteration=False).batch(64)
+train_dataset = train_dataset.shuffle(880, reshuffle_each_iteration=False).batch(256)
+val_dataset = val_dataset.shuffle(880, reshuffle_each_iteration=False).batch(256)
 
 
 def tensorboard_callback():
@@ -50,7 +50,7 @@ def get_model():
     inp = Input((880,))
     hdn = Dense(1024, activation='relu')(inp)
     hdn = BatchNormalization()(hdn)
-    hdn = Dropout(0.5)(hdn)
+    hdn = Dropout(0.4)(hdn)
 
     hdn = Dense(512, activation='relu')(hdn)
     hdn = BatchNormalization()(hdn)
@@ -62,9 +62,11 @@ def get_model():
 
     hdn = Dense(128, activation='relu')(hdn)
     hdn = BatchNormalization()(hdn)
+    hdn = Dropout(0.4)(hdn)
 
     hdn = Dense(64, activation='relu')(hdn)
     hdn = BatchNormalization()(hdn)
+    hdn = Dropout(0.4)(hdn)
 
     out = Dense(10, activation='softmax')(hdn)
 
@@ -73,16 +75,17 @@ def get_model():
 
 
 def main():
-    #### Model Training
+    # Model Training
     model = get_model()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
     model.fit(train_dataset, epochs=10000, validation_data=val_dataset, verbose=2,
               callbacks=[tensorboard_callback(),
-                         EarlyStopping(monitor="val_loss", patience=3000, restore_best_weights=False),
-                         ModelCheckpoint('bin/models/TEST.h5', save_best_only=True, verbose=1)])
-              # class_weight=class_weight)
-    model = load_model("bin/models/TEST.h5")    print(model.summary())
+                         EarlyStopping(monitor="val_loss", patience=200, restore_best_weights=False),
+                         ModelCheckpoint('bin/models/baselineV2.h5', save_best_only=True, verbose=1)])
+    # class_weight=class_weight)
+    model = load_model("bin/models/baselineV2.h5")
+    print(model.summary())
     y = np.argmax(model.predict(test_data), axis=1)
     results = model.evaluate(test_data, test_label)
     print(f'Test loss: {results[0]} / Test accuracy: {results[1]}')

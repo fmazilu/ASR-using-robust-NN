@@ -319,7 +319,7 @@ def add_pink_noise(array):
 def main():
     # Loading the datasets
     # For the attacks we only need the test dataset, but standardizing has to be done in the same method
-    path = 'RoDigits_split/'
+    path = 'RoDigits_splitV2/'
 
     test_filenames = np.load("test_dataset_to_add_noise\\test_filenames.npy")
     test_labels = np.load("test_dataset_to_add_noise\\test_label.npy")
@@ -332,9 +332,10 @@ def main():
     train_data, train_label, val_data, val_label, test_data, test_label = load_npy_dataset(path)
     test_label1 = to_categorical(test_label, 20)
 
-    model_constrained = load_model("bin/models_constrained/model_constrained_Rho1_split.h5")
+    model_constrained = load_model("bin/models_constrained/model_constrained_Rho1_splitV2_batch_norm.h5")
                                    # custom_objects={'customConstraint': customConstraint})
-    model_unconstrained = load_model("bin/models/baseline_split.h5")
+    model_unconstrained = load_model("bin/models/baseline_splitV2.h5")
+    INPUT_SHAPE = 2020
 
     # TODO: Move these commented lines to another script
     # lip_cst = get_lipschitz_constrained(model_constrained)
@@ -348,7 +349,7 @@ def main():
 
     SNRs = [60, 30, 20, 15, 10, 5, 0]  # the values are in dB
     sigmas = np.linspace(0, 10, 10)
-    alphas = np.linspace(0.01, 2, 20)
+    alphas = np.linspace(0.01, 0.02, 20)
     accuracy_constrained = []
     accuracy_unconstrained = []
 
@@ -524,14 +525,15 @@ def main():
         type_of_white_box_attack = input("Type of white box attack: [F]GSM/Carlini[L2]/Carlini[Linf]/[P]GD: ").lower()
         # de continuat cu atacuri de tip white-box
         if type_of_white_box_attack == 'f':
-            eps = np.linspace(0.01, 0.3, 10)
+            eps = np.linspace(0.01, 0.03, 10)
             if attack_after_standardization == 'a':
-                eps = np.linspace(1, 10, 10)
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
+                eps = np.linspace(0.01, 10, 10)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                          , loss_object=CategoricalCrossentropy())
+            # test_data1 = test_data.copy()
             for item in eps:
                 attack_constrained = FastGradientMethod(estimator=model_constrained, eps=item)
                 attack_unconstrained = FastGradientMethod(estimator=model_unconstrained, eps=item)
@@ -569,10 +571,10 @@ def main():
             eps = np.linspace(0.1, 1, 10)
             if attack_after_standardization == 'a':
                 eps = np.linspace(0.1, 0.3, 10)
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                          , loss_object=CategoricalCrossentropy())
             for item in eps:
                 attack_constrained = CarliniLInfMethod(classifier=model_constrained, confidence=item)
@@ -610,48 +612,61 @@ def main():
             plt.show()
 
         elif type_of_white_box_attack == 'l2':
-            item = 0.1
+            # item = 0.1
+            items = np.linspace(0.01, 1, 10)
 
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                          , loss_object=CategoricalCrossentropy())
 
-            attack_constrained = CarliniL2Method(classifier=model_constrained, confidence=item)
-            attack_unconstrained = CarliniL2Method(classifier=model_unconstrained, confidence=item)
+            for item in items:
+                attack_constrained = CarliniL2Method(classifier=model_constrained, confidence=item)
+                attack_unconstrained = CarliniL2Method(classifier=model_unconstrained, confidence=item)
 
-            test_adv_constrained = attack_constrained.generate(x=test_data[:100])
-            test_adv_unconstrained = attack_unconstrained.generate(x=test_data[:100])
+                test_adv_constrained = attack_constrained.generate(x=test_data)
+                test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
 
-            if attack_after_standardization == 'a':
-                train_data, val_data, test_adv_constrained = standardize_dataset(train_data, val_data,
-                                                                                 test_adv_constrained)
-                train_data, val_data, test_adv_unconstrained = standardize_dataset(train_data, val_data,
-                                                                                   test_adv_unconstrained)
+                if attack_after_standardization == 'a':
+                    train_data, val_data, test_adv_constrained = standardize_dataset(train_data, val_data,
+                                                                                     test_adv_constrained)
+                    train_data, val_data, test_adv_unconstrained = standardize_dataset(train_data, val_data,
+                                                                                       test_adv_unconstrained)
 
-            predictions_constrained = model_constrained.predict(test_adv_constrained)
-            predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
+                predictions_constrained = model_constrained.predict(test_adv_constrained)
+                predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
 
-            accuracy_constrained1 = np.sum(
-                np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1[:100], axis=1)) / len(test_label1[:100])
-            accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
-            print(f"Carlini L2 with confidence={item} accuracy on adversarial test examples: "
-                  f"{accuracy_constrained1 * 100}%")
+                accuracy_constrained1 = np.sum(
+                    np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
+                    test_label1)
+                accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
+                print(f"Carlini L2 with confidence={item} accuracy on adversarial test examples: "
+                      f"{accuracy_constrained1 * 100}%")
 
-            accuracy_unconstrained1 = np.sum(
-                np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1[:100], axis=1)) / len(test_label1[:100])
-            accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
-            print(f"Carlini L2 with confidence={item} accuracy on adversarial test examples unconstrained: "
-                  f"{accuracy_unconstrained1 * 100}%")
+                accuracy_unconstrained1 = np.sum(
+                    np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
+                    test_label1)
+                accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
+                print(f"Carlini L2 with confidence={item} accuracy on adversarial test examples unconstrained: "
+                      f"{accuracy_unconstrained1 * 100}%")
+
+            fig, ax = plt.subplots()
+            ax.plot(items, accuracy_constrained, color='r', label='Constrained Model')
+            ax.plot(items, accuracy_unconstrained, color='b', label='Unconstrained model')
+            ax.legend()
+            ax.set_title('Accuracy Carlini L2 attack')
+            ax.set_xlabel('Epsilon')
+            ax.set_ylabel('Accuracy')
+            plt.show()
 
         elif type_of_white_box_attack == 'p':
             eps = np.linspace(0.1, 10, 10)
 
-            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(880,)
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
 
-            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(880,)
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                          , loss_object=CategoricalCrossentropy())
 
             for item in eps:
