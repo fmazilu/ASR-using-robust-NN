@@ -248,13 +248,8 @@ def load_audio_dataset_and_labels(filenames, labels):
 def main():
     data_dir = pathlib.Path('dataset\\rodigits\\')
     save_dir = 'processed_google_dataset'
-    utterance_length = 44
     # Get files
     filenames, labels = get_file_names_and_labels(data_dir)
-    # print(filenames)
-    # print()
-    # print(labels)
-    # print(len(filenames))  # 1998
 
     # shuffle files and labels at the same time
     filenames, labels = shuffle(filenames, labels)
@@ -289,18 +284,18 @@ def main():
     #
     # # Compute MFCC for all files
     # mfcc_train = compute_mfcc_all_files(filenames_train)
-    print(mfcc_train.shape)
-    # mfcc_dev = compute_mfcc_all_files(filenames_dev)
-    print(mfcc_val.shape)
-    # mfcc_test = compute_mfcc_all_files(filenames_test)
-    print(mfcc_test.shape)
-    #
-    np.save("RoDigits_splitV2\\train_data", mfcc_train)
-    np.save("RoDigits_splitV2\\train_label", labels_train)
-    np.save("RoDigits_splitV2\\dev_data", mfcc_val)
-    np.save("RoDigits_splitV2\\dev_label", labels_val)
-    np.save("RoDigits_splitV2\\test_data", mfcc_test)
-    np.save("RoDigits_splitV2\\test_label", labels_test)
+    # print(mfcc_train.shape)
+    # # mfcc_dev = compute_mfcc_all_files(filenames_dev)
+    # print(mfcc_val.shape)
+    # # mfcc_test = compute_mfcc_all_files(filenames_test)
+    # print(mfcc_test.shape)
+    # #
+    # np.save("RoDigits_splitV2\\train_data", mfcc_train)
+    # np.save("RoDigits_splitV2\\train_label", labels_train)
+    # np.save("RoDigits_splitV2\\dev_data", mfcc_val)
+    # np.save("RoDigits_splitV2\\dev_label", labels_val)
+    # np.save("RoDigits_splitV2\\test_data", mfcc_test)
+    # np.save("RoDigits_splitV2\\test_label", labels_test)
 
 
 if __name__ == '__main__':
