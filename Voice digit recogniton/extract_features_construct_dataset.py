@@ -14,6 +14,10 @@ from IPython import display
 from sklearn.utils import shuffle
 
 maxim = 0
+# STANDARD_UTTERANCE_LENGTH is 101 when window length is 441, it is 44 when window length = 2048
+STANDARD_UTTERANCE_LENGTH = 44
+
+
 #
 # EXTRACT MFCC FEATURES
 #
@@ -21,7 +25,6 @@ def extract_features(file_path, utterance_length):
     global maxim
     # Get raw .wav data and sampling rate from librosa's load function
     raw_w, sampling_rate = librosa.load(file_path, mono=True)
-    # print(raw_w.shape)
 
     # Obtain MFCC Features from raw data
     mfcc_features = librosa.feature.mfcc(y=raw_w, sr=sampling_rate)
@@ -62,7 +65,7 @@ def decode_audio(audio_binary):
 
 
 # Returns labels
-## Not used
+# Not used
 def get_label(file):
     parts = tf.strings.split(file, os.path.sep)
 
@@ -72,7 +75,7 @@ def get_label(file):
 
 
 # Returns waveform and label
-## Not used
+# Not used
 def get_waveform_and_label(file_path):
     label = get_label(file_path)
     audio_binary = tf.io.read_file(file_path)
@@ -81,7 +84,7 @@ def get_waveform_and_label(file_path):
 
 
 # Returns spectrogram for one recording
-## Not used
+# Not used
 def get_spectrogram(waveform):
     # Padding for files with less than 16000 samples
     zero_padding = tf.zeros([16000] - tf.shape(waveform), dtype=tf.float32)
@@ -99,7 +102,7 @@ def get_spectrogram(waveform):
 
 
 # Plots spectrogram
-## Not used
+# Not used
 def plot_spectrogram(spectrogram, ax):
     # Convert to frequencies to log scale and transpose so that the time is
     # represented in the x-axis (columns).
@@ -123,12 +126,10 @@ def get_file_names_and_labels(file_path):
     for x in digit:
         if x in commands:
             digit_commands = np.append(digit_commands, x)
-    # print('Commands:', digit_commands)
 
     i = 0
     for x in digit_commands:
         data_dir1 = str(data_dir) + '\\' + str(x)
-        # print(data_dir1)
         filenames += tf.io.gfile.glob(str(data_dir1) + '/*')
         for index in range(len(os.listdir(data_dir1))):
             labels.append(i)
@@ -141,10 +142,10 @@ def get_file_names_and_labels(file_path):
 
 # Compute MFCC for all files in dataset
 def compute_mfcc_all_files(filenames):
-    mfcc_whole_dataset = np.zeros((len(filenames), 20, 44))
-    mfcc_whole_dataset_flattened = np.zeros((len(filenames), 20 * 44))
+    mfcc_whole_dataset = np.zeros((len(filenames), 20, STANDARD_UTTERANCE_LENGTH))
+    mfcc_whole_dataset_flattened = np.zeros((len(filenames), 20 * STANDARD_UTTERANCE_LENGTH))
     for index in range(len(filenames)):
-        mfcc_whole_dataset[index] = extract_features(filenames[index], 44)
+        mfcc_whole_dataset[index] = extract_features(filenames[index], STANDARD_UTTERANCE_LENGTH)
         mfcc_whole_dataset_flattened[index] = mfcc_whole_dataset[index].flatten()
     return mfcc_whole_dataset_flattened
 
@@ -167,11 +168,22 @@ def get_upper_lipschitz(norms):
 
 def get_lipschitz_constrained(model):
     cst = []
+    batch_layers = []
     w_list = []
+    correction_factors = []
+    correction_factor = 1
     for x in model.layers:
+        if "batch" in x.name:
+            batch_layers.append(x)
         if 'dense' in x.name:
             w = x.get_weights()[0]
             w_list.append(w)
+    for layer in batch_layers:
+        gamma = layer.get_weights()[0]
+        variance = layer.get_weights()[3]
+        correction_factors.append(np.sqrt(variance)/gamma)
+    if correction_factors != []:
+        correction_factor = np.prod([np.max(c) for c in correction_factors])
 
     for index in reversed(range(len(w_list))):
         if cst == []:
@@ -180,6 +192,7 @@ def get_lipschitz_constrained(model):
             cst = np.matmul(cst, np.array(w_list[index]).transpose())
 
     cst = np.linalg.norm(cst, ord=2)
+    cst = cst / correction_factor
     return cst
 
 
@@ -190,53 +203,30 @@ if __name__ == '__main__':
     # Get files
     filenames, labels = get_file_names_and_labels(data_dir)
 
-    raw_w, sampling_rate = librosa.load('data\\four\\0cd323ec_nohash_2.wav', mono=True)
-    # mfcc1 = extract_features('data\\four\\0cd323ec_nohash_2.wav', 44)
-    # mfcc2 = librosa.feature.mfcc(raw_w, sampling_rate)
-    # print(mfcc1.shape)
-    # print(mfcc2.shape)
-    # mfcc2 = np.array(mfcc2).flatten()
-    # print(mfcc2.shape)
-    # print(max(abs(raw_w)))
-
     # shuffle files and labels at the same time
-    # filenames, labels = shuffle(filenames, labels)
-    #
-    # # Divide into train, dev and test sets before calculating MFCCs
-    # filenames_train = filenames[:int(int(len(filenames))*0.7)]
-    # # print(len(filenames))
-    # # print(len(filenames_train))
-    # filenames_dev = filenames[int(int(len(filenames))*0.7): int(int(len(filenames))*0.9)]
-    # # print(len(filenames_dev))
-    # filenames_test = filenames[-int(int(len(filenames))*0.1):]
-    # # print(len(filenames_test))
-    # # print(filenames_train[34])
-    #
-    # labels_train = labels[:int(int(labels.shape[0]) * 0.7)]
-    # # print(labels_train.shape)
-    # labels_dev = labels[int(int(labels.shape[0])*0.7): int(int(labels.shape[0])*0.9)]
-    # # print(labels_dev.shape)
-    # labels_test = labels[-int(int(labels.shape[0])*0.1):]
-    # # print(labels_test.shape)
-    #
-    # # Saving test filenames and labels
-    # np.save("test_dataset_to_add_noise\\test_label", labels_test)
-    # np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
-    #
-    #
-    # # Compute MFCC for all files
-    # mfcc_train = compute_mfcc_all_files(filenames_train)
-    # print(mfcc_train.shape)
-    # print(maxim)
-    # mfcc_dev = compute_mfcc_all_files(filenames_dev)
-    # print(mfcc_dev.shape)
-    # mfcc_test = compute_mfcc_all_files(filenames_test)
-    # print(mfcc_test.shape)
-    #
-    #
-    # np.save("processed_google_dataset\\train_data", mfcc_train)
-    # np.save("processed_google_dataset\\train_label", labels_train)
-    # np.save("processed_google_dataset\\dev_data", mfcc_dev)
-    # np.save("processed_google_dataset\\dev_label", labels_dev)
-    # np.save("processed_google_dataset\\test_data", mfcc_test)
-    # np.save("processed_google_dataset\\test_label", labels_test)
+    filenames, labels = shuffle(filenames, labels)
+
+    # Divide into train, dev and test sets before calculating MFCCs
+    filenames_train = filenames[:int(int(len(filenames))*0.7)]
+    filenames_dev = filenames[int(int(len(filenames))*0.7): int(int(len(filenames))*0.9)]
+    filenames_test = filenames[-int(int(len(filenames))*0.1):]
+
+    labels_train = labels[:int(int(labels.shape[0]) * 0.7)]
+    labels_dev = labels[int(int(labels.shape[0])*0.7): int(int(labels.shape[0])*0.9)]
+    labels_test = labels[-int(int(labels.shape[0])*0.1):]
+
+    # Saving test filenames and labels
+    np.save("test_dataset_to_add_noise\\test_label", labels_test)
+    np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
+
+    # Compute MFCC for all files
+    mfcc_train = compute_mfcc_all_files(filenames_train)
+    mfcc_dev = compute_mfcc_all_files(filenames_dev)
+    mfcc_test = compute_mfcc_all_files(filenames_test)
+
+    np.save("processed_google_dataset\\train_data", mfcc_train)
+    np.save("processed_google_dataset\\train_label", labels_train)
+    np.save("processed_google_dataset\\dev_data", mfcc_dev)
+    np.save("processed_google_dataset\\dev_label", labels_dev)
+    np.save("processed_google_dataset\\test_data", mfcc_test)
+    np.save("processed_google_dataset\\test_label", labels_test)
