@@ -34,7 +34,8 @@ class norm_constraint(Callback):
 
 
 # Constraint class
-class customConstraint(Constraint):  #### De vazut API
+# This corresponds to the first constraint algorithm in the thesis
+class customConstraint(Constraint):
     def __init__(self, rho):
         super(Constraint, self).__init__()
         self.rho = rho
@@ -49,13 +50,13 @@ class customConstraint(Constraint):  #### De vazut API
 
 
 # Constraint callback class - performance is pretty poor, no GPU usage
+# This corresponds to the third constraint algorithm in the thesis
 class norm_constraint_FISTA(Callback):
     def __init__(self, rho, nit):
         super(Callback, self).__init__()
         self.rho = rho
         self.m = 0
         self.nit = nit
-        self.rho = self.rho + 5
 
     def get_w_list(self):
         w_list = []
@@ -87,7 +88,7 @@ class norm_constraint_FISTA(Callback):
             [u1, s1, v1] = np.linalg.svd(Yt / gam, full_matrices=False)
             s1 = np.clip(s1, 0, rho)
             Y = Yt - gam * np.dot(u1 * s1, v1)
-            if (criterion < 30 and constraint < 0.01):
+            if criterion < 30 and constraint < 0.01:
                 # print(i)
                 return w_new
         return w_new
@@ -121,8 +122,6 @@ class norm_constraint_FISTA(Callback):
         return w_new
 
     def on_batch_end(self, batch, logs=None):
-        if self.rho > 2:
-            self.rho = self.rho - 0.0001
         for l in self.model.layers:
             if 'dense' in l.name:
                 w = l.get_weights()[0]
@@ -132,6 +131,7 @@ class norm_constraint_FISTA(Callback):
 
 
 # Simple constraint
+# This corresponds to the second constraint algorithm in the thesis
 class simple_norm_constraint(Callback):
     def __init__(self, rho, affected_layers_indices):
         super(Callback, self).__init__()
@@ -145,7 +145,6 @@ class simple_norm_constraint(Callback):
         for l in self.model.layers:
             if 'dense' in l.name:
                 w = l.get_weights()[0]
-                # print(f"w inainte de modificare {w}")
                 w_list.append(w)
         return w_list
 
@@ -159,19 +158,13 @@ class simple_norm_constraint(Callback):
     def get_projection(self, w):
         w_list = self.get_w_list()
         cst = []
-        # for i in range(len(w_list)):
-        #     w_list[i] = w_list[i] * np.greater_equal(w_list[i], 0)
 
         for index in reversed(range(len(w_list))):
             if cst == []:
                 cst = np.array(w_list[index]).transpose()
-                # print(f"cst: {cst}")
             else:
                 cst = np.matmul(cst, np.array(w_list[index]).transpose())
-        # w = w * np.greater_equal(w, 0)
         w_new = w * np.power((self.rho / (np.linalg.norm(cst, ord=2) + np.spacing(1))), 1/len(w_list))
-        # print(w_new)
-        # print(np.all(w_new < 0))  # To see if all components are non-negative
 
         return w_new
 
@@ -181,7 +174,6 @@ class simple_norm_constraint(Callback):
             for l in self.model.layers:
                 if 'dense' in l.name:
                     w = l.get_weights()[0]
-                    # print(np.all(w < 0))  # To see if all components are non-negative
                     b = l.get_weights()[1]
                     w_new = self.get_projection(w)
                     l.set_weights([w_new, b])
