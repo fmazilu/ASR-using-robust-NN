@@ -1,16 +1,10 @@
 import os
 import pathlib
 import librosa
-import pandas as pd
 import numpy as np
-import csv
-import random
 import librosa.display
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import tflearn
-from tensorflow.keras.utils import to_categorical
-from IPython import display
 from sklearn.utils import shuffle
 
 
@@ -19,6 +13,8 @@ digit = ['006', '041', '043', '044', '045', '046', '047', '048', '049', '105', '
 
 
 maximum = 0
+
+
 #
 # EXTRACT MFCC FEATURES
 #
@@ -27,7 +23,6 @@ def extract_features(file_path, utterance_length):
     # window = 2 * 22050  # aprox 2 seconds of audio
     # Get raw .wav data and sampling rate from librosa's load function
     raw_w, sampling_rate = librosa.load(file_path, mono=True)
-    # print(raw_w.shape)
 
     # Obtain MFCC Features from raw data
     mfcc_features = librosa.feature.mfcc(y=raw_w, sr=sampling_rate)
@@ -66,7 +61,7 @@ def decode_audio(audio_binary):
 
 
 # Returns labels
-## Not used
+# Not used
 def get_label(file):
     parts = tf.strings.split(file, os.path.sep)
 
@@ -76,7 +71,7 @@ def get_label(file):
 
 
 # Returns waveform and label
-## Not used
+# Not used
 def get_waveform_and_label(file_path):
     label = get_label(file_path)
     audio_binary = tf.io.read_file(file_path)
@@ -85,7 +80,7 @@ def get_waveform_and_label(file_path):
 
 
 # Returns spectrogram for one recording
-## Not used
+# Not used
 def get_spectrogram(waveform):
     # Padding for files with less than 16000 samples
     zero_padding = tf.zeros([16000] - tf.shape(waveform), dtype=tf.float32)
@@ -103,7 +98,7 @@ def get_spectrogram(waveform):
 
 
 # Plots spectrogram
-## Not used
+# Not used
 def plot_spectrogram(spectrogram, ax):
     # Convert to frequencies to log scale and transpose so that the time is
     # represented in the x-axis (columns).
@@ -128,12 +123,10 @@ def get_file_names_and_labels(file_path):
     for x in digit:
         if x in commands:
             digit_commands = np.append(digit_commands, x)
-    # print('Commands:', digit_commands)
 
     i = 0
     for x in digit_commands:
         data_dir1 = str(data_dir) + '\\' + str(x)
-        # print(data_dir1)
         filenames += tf.io.gfile.glob(str(data_dir1) + '/*')
         for index in range(len(os.listdir(data_dir1))):
             labels.append(i)
@@ -188,7 +181,6 @@ def get_lipschitz_constrained(model):
         correction_factors.append(np.sqrt(variance)/gamma)
     if correction_factors != []:
         correction_factor = np.prod([np.max(c) for c in correction_factors])
-    # print([1/np.max(c) for c in correction_factors])
 
     for index in reversed(range(len(w_list))):
         if cst == []:
@@ -236,12 +228,8 @@ def load_audio_dataset_and_labels(filenames, labels):
                                                   win_length=441, n_fft=441, hop_length=220))
 
     mfcc_features = np.array(mfcc_features, dtype=np.ndarray)
-    # print(mfcc_features.shape)
 
     mfcc = mfcc_features.reshape(mfcc_features.shape[0], mfcc_features.shape[1] * mfcc_features.shape[2])
-    # print(mfcc.shape)
-    # print(split_audio.shape)
-    # print(len(local_labels))
     return mfcc, np.array(local_labels)
 
 
@@ -256,46 +244,27 @@ def main():
 
     # Divide into train, dev and test sets before calculating MFCCs
     filenames_train = filenames[:int(int(len(filenames))*0.7)]
-    # print(len(filenames))
-    # print(len(filenames_train))
     filenames_dev = filenames[int(int(len(filenames))*0.7): int(int(len(filenames))*0.9)]
-    # print(len(filenames_dev))
     filenames_test = filenames[-int(int(len(filenames))*0.1):]
-    # print(len(filenames_test))
-    # print(filenames_train[34])
 
     labels_train = labels[:int(int(labels.shape[0]) * 0.7)]
-    # print(labels_train.shape)
     labels_dev = labels[int(int(labels.shape[0])*0.7): int(int(labels.shape[0])*0.9)]
-    # print(labels_dev.shape)
     labels_test = labels[-int(int(labels.shape[0])*0.1):]
-    # print(labels_test.shape)
-    # print(digit[labels_train[34]])
 
     mfcc_train, labels_train = load_audio_dataset_and_labels(filenames_train, labels_train)
     mfcc_val, labels_val = load_audio_dataset_and_labels(filenames_dev, labels_dev)
     mfcc_test, labels_test = load_audio_dataset_and_labels(filenames_test, labels_test)
-    # print(mfcc_test.shape)
-    # print(labels_test.shape)
 
     # # Saving test filenames and labels
-    # np.save("test_dataset_to_add_noise\\test_label", labels_test)
-    # np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
-    #
-    # # Compute MFCC for all files
-    # mfcc_train = compute_mfcc_all_files(filenames_train)
-    # print(mfcc_train.shape)
-    # # mfcc_dev = compute_mfcc_all_files(filenames_dev)
-    # print(mfcc_val.shape)
-    # # mfcc_test = compute_mfcc_all_files(filenames_test)
-    # print(mfcc_test.shape)
-    # #
-    # np.save("RoDigits_splitV2\\train_data", mfcc_train)
-    # np.save("RoDigits_splitV2\\train_label", labels_train)
-    # np.save("RoDigits_splitV2\\dev_data", mfcc_val)
-    # np.save("RoDigits_splitV2\\dev_label", labels_val)
-    # np.save("RoDigits_splitV2\\test_data", mfcc_test)
-    # np.save("RoDigits_splitV2\\test_label", labels_test)
+    np.save("test_dataset_to_add_noise\\test_label", labels_test)
+    np.save("test_dataset_to_add_noise\\test_filenames", filenames_test)
+
+    np.save("RoDigits_splitV2\\train_data", mfcc_train)
+    np.save("RoDigits_splitV2\\train_label", labels_train)
+    np.save("RoDigits_splitV2\\dev_data", mfcc_val)
+    np.save("RoDigits_splitV2\\dev_label", labels_val)
+    np.save("RoDigits_splitV2\\test_data", mfcc_test)
+    np.save("RoDigits_splitV2\\test_label", labels_test)
 
 
 if __name__ == '__main__':
