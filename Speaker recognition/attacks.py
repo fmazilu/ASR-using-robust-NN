@@ -1,7 +1,19 @@
 # This file is used for evaluating the models' robustness to different black-box and white-box attacks
+# To obtain the results shown in the thesis the following inputs should be chosen:
+# Black-box attack with white noise added to the MFCCs: a -> b -> s -> m
+# Black-box attack with white noise added to the audio: a -> b -> s -> a
+# Black-box attack with white noise mixture added to the MFCCs: a -> b -> m -> m
+# Black-box attack with white noise mixture added to the audio: a -> b -> m -> a
+# Black-box attack with white noise added to the audio waveforms with targeted SNR: a -> b -> snr -> a
+# White-box attack FGSM: b -> w -> f
+# White-box attack PGD: b -> w -> p
+# White-box attack JSMA: b -> w -> j
+# White-box attack Carlini l2: a -> w -> l2
+# White-box attack Carlini l2: a -> w -> linf
+
 import tensorflow as tf
-from art.attacks.evasion import FastGradientMethod, CarliniL2Method, CarliniLInfMethod, ProjectedGradientDescent
-    # ImperceptibleASR, CarliniWagnerASR
+from art.attacks.evasion import FastGradientMethod, CarliniL2Method, CarliniLInfMethod, ProjectedGradientDescent, \
+    SaliencyMapMethod
 from art.attacks.evasion.imperceptible_asr.imperceptible_asr import ImperceptibleASR, PsychoacousticMasker
 from art.estimators.classification import TensorFlowV2Classifier
 from art.estimators.tensorflow import TensorFlowV2Estimator
@@ -17,8 +29,6 @@ import librosa
 import colorednoise as cn
 from AsrImperceptible import AsrImperceptibleAttack, DummyTensorFlowLingvoASR
 from Constraints import customConstraint
-# from extract_features_construct_dataset import get_lipschitz_constrained, get_upper_lipschitz, get_norms
-# from mixtgauss import add_noise
 
 
 def load_npy_dataset(path):
@@ -34,14 +44,11 @@ def load_npy_dataset(path):
     """
     train_data = np.array(np.load(path + "train_data.npy", allow_pickle=True))
     train_label = np.load(path + "train_label.npy")
-    # train_label = to_categorical(train_label, 10)
     val_label = np.load(path + "dev_label.npy")
-    # val_label = to_categorical(val_label, 10)
     val_data = np.load(path + "dev_data.npy", allow_pickle=True)
     test_data = np.load(path + "test_data.npy", allow_pickle=True)
     test_data = np.asarray(test_data).astype('float32')
     test_label = np.load(path + "test_label.npy")
-    # test_label = to_categorical(test_label1, 10)
 
     return train_data, train_label, val_data, val_label, test_data, test_label
 
@@ -87,46 +94,10 @@ def add_white_noise(array, sigma):
     return noisy_array
 
 
-def black_box_attack_on_audio(file_path, utterance_length, sigma=0, p=0, alpha=0):
+def black_box_attack_on_audio_dataset(filenames, labels, sigma=0, p=0, alpha=0):
     """
-    Adds white gaussian noise on an array using the add_white_noise(array, sigma) function
-    or the add_noise(x, p, alpha) function, depending on which input arguments are equal to 0 and then it computes
-    the MFCC of the resulted noisy signal.
-
-    arguments:
-    file_path: the file path to the audio signal
-    utterance_length: the length of the signal in number of windows
-    sigma: the standard deviation of the white gaussian noise, if it is 0 then no white noise is added
-    p: probability of peaks
-    alpha: standard deviation of background noise, if both alpha and p are equal to zero then no mixt noise is added
-
-    output:
-    mfcc_features: the MFCC of the noisy audio
-    """
-    # Get raw .wav data and sampling rate from librosa's load function
-    raw_w, sampling_rate = librosa.load(file_path, mono=True)
-
-    if sigma != 0:
-        raw_w = add_white_noise(raw_w, sigma)
-    elif (p != 0) and (alpha != 0):
-        raw_w = add_noise(x=np.expand_dims(raw_w, axis=0), p=p, alpha=alpha)
-        raw_w = np.transpose(raw_w)
-        raw_w = raw_w.flatten()
-
-    # Obtain MFCC Features from raw data
-    mfcc_features = librosa.feature.mfcc(y=raw_w, sr=sampling_rate)
-    if mfcc_features.shape[1] > utterance_length:
-        mfcc_features = mfcc_features[:, 0:utterance_length]
-    else:
-        mfcc_features = np.pad(mfcc_features, ((0, 0), (0, utterance_length - mfcc_features.shape[1])),
-                               mode='constant', constant_values=0)
-
-    return mfcc_features
-
-
-def black_box_attack_on_audio_dataset(filenames, sigma, p, alpha):
-    """
-    Adds white gaussian noise on an entire data set and returns the MFCC for the whole data set
+    Adds white gaussian noise or gaussian mixture on an entire data set and returns the MFCC and labels for
+    the whole data set
 
     arguments:
     filenames: array containing the paths to each audio file in the data set
@@ -135,15 +106,44 @@ def black_box_attack_on_audio_dataset(filenames, sigma, p, alpha):
     alpha: standard deviation of background noise, if both alpha and p are equal to zero then no mixt noise is added
 
     output:
-    mfcc_whole_dataset_flattened: the MFCC for the whole data set
+    mfcc: the MFCC for the whole data set
+    labels: labels corresponding for each example
     """
-    mfcc_whole_dataset = np.zeros((len(filenames), 20, 500))
-    mfcc_whole_dataset_flattened = np.zeros((len(filenames), 20 * 500))
-    for index in range(len(filenames)):
-        mfcc_whole_dataset[index] = black_box_attack_on_audio(filenames[index], 500, sigma=sigma, p=p, alpha=alpha)
-        mfcc_whole_dataset_flattened[index] = mfcc_whole_dataset[index].flatten()
-    return mfcc_whole_dataset_flattened
-# Type one black-box attack
+
+    split_audio = []
+    mfcc_features = []
+    local_labels = []
+    labels_copy = np.copy(labels)
+    for i, file_path in enumerate(filenames):
+        # Get raw .wav data and sampling rate from librosa's load function
+        raw_w, sampling_rate = librosa.load(file_path, mono=True)
+        test = raw_w
+        if sigma != 0:
+            raw_w = add_white_noise(raw_w, sigma)
+        elif p != 0 and alpha != 0:
+            raw_w = add_noise(raw_w, p=p, alpha=alpha)
+        window_length = 1 * sampling_rate  # aprox 1 second of audio
+        audio_length = int(len(raw_w) / window_length)
+        # Cutting off first second and last second (actually more than one second at the end) of recording
+        raw_w = raw_w[window_length:(audio_length - 1) * window_length]
+        # update new audio length
+        audio_length = int(len(raw_w) / window_length)
+        for index in range(audio_length):
+            # for this file append the label to the local labels variables as many times as the windows are in the audio
+            # file
+            local_labels.append(labels_copy[i])
+            split_audio.append(raw_w[index * window_length: (index + 1) * window_length])
+
+    split_audio = np.array(split_audio, dtype=np.ndarray)
+    for j in range(split_audio.shape[0]):
+        # Obtain MFCC Features from raw data, window length = 441 for 20ms at 22kHz sampling rate
+        mfcc_features.append(librosa.feature.mfcc(y=np.array(split_audio[j], dtype=float), sr=sampling_rate,
+                                                  win_length=441, n_fft=441, hop_length=220))
+
+    mfcc_features = np.array(mfcc_features, dtype=np.ndarray)
+
+    mfcc = mfcc_features.reshape(mfcc_features.shape[0], mfcc_features.shape[1] * mfcc_features.shape[2])
+    return mfcc, np.array(local_labels)
 
 
 def mixtgauss(N, p, sigma0, sigma1):
@@ -159,14 +159,9 @@ def mixtgauss(N, p, sigma0, sigma1):
     output:
     x: output noise
     """
-    q = np.random.randn(N, 1)
-    # print(q)
-    # print(q.shape)
-    u = q < p
-    # print(u)
-    # print(sigma1 * u)
-    # print(1-u)
-    x = (sigma0 * (1 - u) + sigma1 * u) * np.random.randn(N, 1)
+    q = np.random.normal(0, 1, N)
+    u = np.abs(q) < p
+    x = (sigma0 * (1 - u) + sigma1 * u) * np.random.normal(0, 1, N)
 
     return x
 
@@ -225,10 +220,8 @@ def add_noise_mixture_on_dataset(dataset, p, alpha):
     noisy_dataset: MFCC data set with added noise mixture
     """
     noisy_dataset = np.array(dataset)
-    # print(noisy_dataset.shape) (2366, 880)
     for index in range(noisy_dataset.shape[0]):
-        # print(noisy_dataset[index].shape)  #(880,)
-        noisy_dataset[index] = add_noise(x=np.expand_dims(noisy_dataset[index], axis=0), p=p, alpha=alpha)
+        noisy_dataset[index] = add_noise(x=noisy_dataset[index], p=p, alpha=alpha)
     return noisy_dataset
 
 
@@ -249,7 +242,7 @@ def add_white_noise_with_snr(audio, target_snr_db):
     noise_avg_db = signal_avg_db - target_snr_db
     noise_avg_watts = 10 ** (noise_avg_db / 10)
     mean_noise = 0
-    # k = np.sqrt(1 / (10 ** (target_snr_db / 10))) // dacă vrei să normezi la puterea semnalului
+    # k = np.sqrt(1 / (10 ** (target_snr_db / 10))) // if norming to the power of the signal is wanted
     k = 1
     noise_volts = k * np.random.normal(mean_noise, np.sqrt(noise_avg_watts), len(sample))
     noise_volts_power = np.mean(noise_volts ** 2)
@@ -258,62 +251,48 @@ def add_white_noise_with_snr(audio, target_snr_db):
     return noisy_signal
 
 
-def black_box_attack_on_audio_snr(file_path, utterance_length, target_snr_db):
+def black_box_attack_on_audio_snr(filenames, labels, target_snr_db):
     """
     Adds white gaussian noise on an audio file, it adds the noise with respect to the target_snr_db using the
     add_white_noise_with_snr(audio, target_snr_db) function and the computes the MFCC features for that file
-
-    arguments:
-    file_path: the file path to the audio signal
-    utterance_length: the length of the signal in number of windows
-    target_snr_db: the target signal to noise ratio in dB
-
-    output:
-    mfcc_features: the MFCC of the noisy audio
-    """
-    # Get raw .wav data and sampling rate from librosa's load function
-    raw_w, sampling_rate = librosa.load(file_path, mono=True)
-
-    raw_w = add_white_noise_with_snr(raw_w, target_snr_db)
-
-    # Obtain MFCC Features from raw data
-    mfcc_features = librosa.feature.mfcc(y=raw_w, sr=sampling_rate)
-    if mfcc_features.shape[1] > utterance_length:
-        mfcc_features = mfcc_features[:, 0:utterance_length]
-    else:
-        mfcc_features = np.pad(mfcc_features, ((0, 0), (0, utterance_length - mfcc_features.shape[1])),
-                               mode='constant', constant_values=0)
-
-    return mfcc_features
-
-
-def black_box_attack_on_audio_dataset_snr(filenames, target_snr_db):
-    """
-    Adds white gaussian noise on an audio data set, it adds the noise with respect to the target_snr_db using the
-    add_white_noise_with_snr(audio, target_snr_db) function and the computes the MFCC features for each file
 
     arguments:
     filenames: array containing the paths to each audio file in the data set
     target_snr_db: the target signal to noise ratio in dB
 
     output:
-    mfcc_whole_dataset_flattened: the MFCC for the whole data set
+    mfcc_features: the MFCC of the noisy audio dataset
     """
-    mfcc_whole_dataset = np.zeros((len(filenames), 20, 500))
-    mfcc_whole_dataset_flattened = np.zeros((len(filenames), 20 * 500))
-    for index in range(len(filenames)):
-        mfcc_whole_dataset[index] = black_box_attack_on_audio_snr(filenames[index], 500, target_snr_db)
-        mfcc_whole_dataset_flattened[index] = mfcc_whole_dataset[index].flatten()
-    return mfcc_whole_dataset_flattened
+    split_audio = []
+    mfcc_features = []
+    local_labels = []
+    labels_copy = np.copy(labels)
+    for i, file_path in enumerate(filenames):
+        # Get raw .wav data and sampling rate from librosa's load function
+        raw_w, sampling_rate = librosa.load(file_path, mono=True)
+        raw_w = add_white_noise_with_snr(raw_w,target_snr_db)
+        window_length = 1 * sampling_rate  # aprox 1 second of audio
+        audio_length = int(len(raw_w)/window_length)
+        # Cutting off first second and last second (actually more than one second at the end) of recording
+        raw_w = raw_w[window_length:(audio_length - 1) * window_length]
+        # update new audio length
+        audio_length = int(len(raw_w) / window_length)
+        for index in range(audio_length):
+            # for this file append the label to the local labels variables as many times as the windows are in the audio
+            # file
+            local_labels.append(labels_copy[i])
+            split_audio.append(raw_w[index * window_length: (index + 1) * window_length])
 
+    split_audio = np.array(split_audio, dtype=np.ndarray)
+    for j in range(split_audio.shape[0]):
+        # Obtain MFCC Features from raw data, window length = 441 for 20ms at 22kHz sampling rate
+        mfcc_features.append(librosa.feature.mfcc(y=np.array(split_audio[j], dtype=float), sr=sampling_rate,
+                                                  win_length=441, n_fft=441, hop_length=220))
 
-def add_pink_noise(array):
-    beta = 1  # Pink noise
-    N = array.shape[0]
-    noise = cn.powerlaw_psd_gaussian(beta, N)
-    noisy_array = array + noise
-    return noisy_array
-# TODO: continue implementation
+    mfcc_features = np.array(mfcc_features, dtype=np.ndarray)
+
+    mfcc = mfcc_features.reshape(mfcc_features.shape[0], mfcc_features.shape[1] * mfcc_features.shape[2])
+    return mfcc, np.array(local_labels)
 
 
 def main():
@@ -321,35 +300,26 @@ def main():
     # For the attacks we only need the test dataset, but standardizing has to be done in the same method
     path = 'RoDigits_splitV2/'
 
-    test_filenames = np.load("test_dataset_to_add_noise\\test_filenames.npy")
-    test_labels = np.load("test_dataset_to_add_noise\\test_label.npy")
+    test_filenames = np.load("test_dataset_to_add_noiseV2\\test_filenames.npy")
+    test_labels = np.load("test_dataset_to_add_noiseV2\\test_label.npy")
     test_labels2 = []
     for elem in test_labels:
         test_labels2.append(str(elem))
     test_labels2 = np.array(test_labels2)
     test_labels = to_categorical(test_labels, 20)
+    print(test_labels2[0])
 
     train_data, train_label, val_data, val_label, test_data, test_label = load_npy_dataset(path)
     test_label1 = to_categorical(test_label, 20)
 
-    model_constrained = load_model("bin/models_constrained/model_constrained_Rho1_splitV2_batch_norm.h5")
-                                   # custom_objects={'customConstraint': customConstraint})
+    model_constrained = load_model("bin/models_constrained/model_C2_rho1.h5")
+
     model_unconstrained = load_model("bin/models/baseline_splitV2.h5")
     INPUT_SHAPE = 2020
 
-    # TODO: Move these commented lines to another script
-    # lip_cst = get_lipschitz_constrained(model_constrained)
-    # print(f"The Lipschitz Constant for the constrained model: {lip_cst}")
-    # norms = get_norms(model_constrained)
-    # upper_lip = get_upper_lipschitz(norms)
-    # print(f"The upper-bound Lipschitz Constant for the constrained model: {upper_lip}")
-    # norms = get_norms(model_unconstrained)
-    # upper_lip = get_upper_lipschitz(norms)
-    # print(f"The upper-bound Lipschitz Constant for the unconstrained model: {upper_lip}")
-
-    SNRs = [60, 30, 20, 15, 10, 5, 0]  # the values are in dB
-    sigmas = np.linspace(0, 10, 10)
-    alphas = np.linspace(0.01, 0.02, 20)
+    SNRs = [60, 50, 40, 30, 20, 15, 10, 5, 0]  # the values are in dB
+    sigmas = np.linspace(0, 100, 20)
+    alphas = np.linspace(0, 0.2, 20)
     accuracy_constrained = []
     accuracy_unconstrained = []
 
@@ -363,14 +333,19 @@ def main():
         type_of_black_box_attack = input("Type of black-box attack [S]imple/[M]ixture/[SNR]: ").lower()
         noise_over_audio_or_mfcc = input("Add white noise over [A]udio or [M]FCC: ").lower()
         if noise_over_audio_or_mfcc == 'a':
-            sigmas = np.linspace(0, 0.1, 10)
+            sigmas = np.linspace(0, 0.005, 10)
+            # sigmas = [0, 0.002, 0.004, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05, 0.075, 0.1]
             if type_of_black_box_attack == 's':
                 for sigma in sigmas:
                     # Here the data is raw audio data at the input, so there is no need for standardizing it
-                    test_data2 = black_box_attack_on_audio_dataset(test_filenames, sigma, p=0, alpha=0)
+                    test_data2, test_labels = black_box_attack_on_audio_dataset(test_filenames, labels=test_labels2,
+                                                                   sigma=sigma, p=0, alpha=0)
+
+                    test_labels = to_categorical(test_labels, 20)
+
 
                     # Now we standardize the data
-                    train_data, val_data, test_data2 = standardize_dataset(train_data, val_data, test_data2)
+                    _, _, test_data2 = standardize_dataset(train_data, val_data, test_data2)
 
                     predictions_constrained = model_constrained.predict(test_data2)
                     predictions_unconstrained = model_unconstrained.predict(test_data2)
@@ -397,25 +372,29 @@ def main():
                 plt.show()
 
             elif type_of_black_box_attack == 'm':  ## aici de introdus atacul pe baza de mixtura
-                p = 0.1
+                p = 0.01
+                alphas = np.linspace(0, 0.005, 10)
                 for alpha in alphas:
                     # Here the data is raw audio data at the input, so there is no need for standardizing it
-                    test_data2 = black_box_attack_on_audio_dataset(test_filenames, sigma=0, p=p, alpha=alpha)
+                    test_data2, test_labels = black_box_attack_on_audio_dataset(test_filenames, test_labels2,
+                                                                                 sigma=0, p=p, alpha=alpha)
+
+                    test_labels = to_categorical(test_labels, 20)
 
                     # Now we standardize the data
-                    train_data, val_data, test_data2 = standardize_dataset(train_data, val_data, test_data2)
+                    _, _, test_data2 = standardize_dataset(train_data, val_data, test_data2)
 
                     predictions_constrained = model_constrained.predict(test_data2)
                     predictions_unconstrained = model_unconstrained.predict(test_data2)
 
                     accuracy_constrained1 = np.sum(
-                        np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1, axis=1)) / len(test_label1)
+                        np.argmax(predictions_constrained, axis=1) == np.argmax(test_labels, axis=1)) / len(test_labels)
                     accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
                     print("Accuracy on black-box attack test examples: {}%".format(accuracy_constrained1 * 100))
 
                     accuracy_unconstrained1 = np.sum(
-                        np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
-                        test_label1)
+                        np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_labels, axis=1)) / len(
+                        test_labels)
                     accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
                     print("Accuracy on black-box attack test examples unconstrained: {}%".format(
                         accuracy_unconstrained1 * 100))
@@ -433,22 +412,24 @@ def main():
                 for snr in SNRs:
                     test_data2 = np.zeros((test_data.shape[0], test_data.shape[1]))
                     # Here the data is raw audio data at the input, so there is no need for standardizing it
-                    test_data2 = black_box_attack_on_audio_dataset_snr(test_filenames, snr)
+                    test_data2, test_labels = black_box_attack_on_audio_snr(test_filenames, test_labels2,
+                                                                             target_snr_db=snr)
+                    test_labels = to_categorical(test_labels, 20)
 
                     # Now we standardize the data
-                    train_data, val_data, test_data2 = standardize_dataset(train_data, val_data, test_data2)
+                    _, _, test_data2 = standardize_dataset(train_data, val_data, test_data2)
 
                     predictions_constrained = model_constrained.predict(test_data2)
                     predictions_unconstrained = model_unconstrained.predict(test_data2)
 
                     accuracy_constrained1 = np.sum(
-                        np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1, axis=1)) / len(test_label1)
+                        np.argmax(predictions_constrained, axis=1) == np.argmax(test_labels, axis=1)) / len(test_labels)
                     accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
                     print("Accuracy on black-box attack test examples: {}%".format(accuracy_constrained1 * 100))
 
                     accuracy_unconstrained1 = np.sum(
-                        np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1, axis=1)) / len(
-                        test_label1)
+                        np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_labels, axis=1)) / len(
+                        test_labels)
                     accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
                     print("Accuracy on black-box attack test examples unconstrained: {}%".format(
                         accuracy_unconstrained1 * 100))
@@ -458,7 +439,7 @@ def main():
                 ax.plot(SNRs, accuracy_unconstrained, color='b', label='Unconstrained model')
                 ax.legend()
                 ax.set_title('Accuracy vs SNR')
-                ax.set_xlabel('SNR')
+                ax.set_xlabel('SNR [dB]')
                 ax.set_ylabel('Accuracy')
                 plt.show()
 
@@ -467,7 +448,7 @@ def main():
                 for sigma in sigmas:
                     test_data2 = add_white_noise_on_dataset(test_data, sigma)
                     if attack_after_standardization == 'a':
-                        train_data, val_data, test_data2 = standardize_dataset(train_data, val_data, test_data2)
+                        _, _, test_data2 = standardize_dataset(train_data, val_data, test_data2)
 
                     predictions_constrained = model_constrained.predict(test_data2)
                     predictions_unconstrained = model_unconstrained.predict(test_data2)
@@ -491,12 +472,13 @@ def main():
                 ax.set_ylabel('Accuracy')
                 plt.show()
 
-            elif type_of_black_box_attack == 'm': ## aici de introdus atacul pe baza de mixtura
-                p = 0.1
+            elif type_of_black_box_attack == 'm':
+                p = 0.01
+                alphas = np.linspace(0, 100, 30)
                 for alpha in alphas:
                     test_data2 = add_noise_mixture_on_dataset(dataset=test_data, p=p, alpha=alpha)
                     if attack_after_standardization == 'a':
-                        train_data, val_data, test_data2 = standardize_dataset(train_data, val_data, test_data2)
+                        _, _, test_data2 = standardize_dataset(train_data, val_data, test_data2)
 
                     predictions_constrained = model_constrained.predict(test_data2)
                     predictions_unconstrained = model_unconstrained.predict(test_data2)
@@ -522,10 +504,10 @@ def main():
                 plt.show()
 
     elif type_of_attack == 'w':
-        type_of_white_box_attack = input("Type of white box attack: [F]GSM/Carlini[L2]/Carlini[Linf]/[P]GD: ").lower()
+        type_of_white_box_attack = input("Type of white box attack: [F]GSM/Carlini[L2]/Carlini[Linf]/[P]GD/[J]SMA: ").lower()
         # de continuat cu atacuri de tip white-box
         if type_of_white_box_attack == 'f':
-            eps = np.linspace(0.01, 0.03, 10)
+            eps = np.linspace(0.01, 0.1, 10)
             if attack_after_standardization == 'a':
                 eps = np.linspace(0.01, 10, 10)
             model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
@@ -533,7 +515,7 @@ def main():
 
             model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                          , loss_object=CategoricalCrossentropy())
-            # test_data1 = test_data.copy()
+
             for item in eps:
                 attack_constrained = FastGradientMethod(estimator=model_constrained, eps=item)
                 attack_unconstrained = FastGradientMethod(estimator=model_unconstrained, eps=item)
@@ -542,19 +524,21 @@ def main():
                 test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
 
                 if attack_after_standardization == 'a':
-                    train_data, val_data, test_adv_constrained = standardize_dataset(train_data, val_data,
-                                                                                     test_adv_constrained)
-                    train_data, val_data, test_adv_unconstrained = standardize_dataset(train_data, val_data,
-                                                                                       test_adv_unconstrained)
+                    _, _, test_adv_constrained = standardize_dataset(train_data, val_data,
+                                                                     test_adv_constrained)
+                    _, _, test_adv_unconstrained = standardize_dataset(train_data, val_data,
+                                                                       test_adv_unconstrained)
 
                 predictions_constrained = model_constrained.predict(test_adv_constrained)
                 predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
 
-                accuracy_constrained1 = np.sum(np.argmax(predictions_constrained, axis=1) == np.argmax(test_label1, axis=1)) / len(test_label1)
+                accuracy_constrained1 = np.sum(np.argmax(predictions_constrained, axis=1) ==
+                                               np.argmax(test_label1, axis=1)) / len(test_label1)
                 accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
                 print("Accuracy on adversarial test examples: {}%".format(accuracy_constrained1 * 100))
 
-                accuracy_unconstrained1 = np.sum(np.argmax(predictions_unconstrained, axis=1) == np.argmax(test_label1, axis=1)) / len(test_label1)
+                accuracy_unconstrained1 = np.sum(np.argmax(predictions_unconstrained, axis=1) ==
+                                                 np.argmax(test_label1, axis=1)) / len(test_label1)
                 accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
                 print("Accuracy on adversarial test examples unconstrained: {}%".format(accuracy_unconstrained1 * 100))
 
@@ -567,10 +551,37 @@ def main():
             ax.set_ylabel('Accuracy')
             plt.show()
 
+        elif type_of_white_box_attack == 'j':
+            eps = 0.2
+
+            model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(2020,)
+                                                       , loss_object=CategoricalCrossentropy())
+
+            model_unconstrained = TensorFlowV2Classifier(model=model_unconstrained, nb_classes=20, input_shape=(2020,)
+                                                         , loss_object=CategoricalCrossentropy())
+
+            attack_unconstrained = SaliencyMapMethod(classifier=model_unconstrained, theta=eps, gamma=0.1)
+            attack_constrained = SaliencyMapMethod(classifier=model_constrained, theta=eps, gamma=0.1)
+
+            test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
+            test_adv_constrained = attack_constrained.generate(x=np.array(test_data))
+
+            predictions_constrained = model_constrained.predict(test_adv_constrained)
+            predictions_unconstrained = model_unconstrained.predict(test_adv_unconstrained)
+
+            accuracy_constrained1 = np.sum(np.argmax(predictions_constrained, axis=1) ==
+                                           np.argmax(test_label1, axis=1)) / len(test_label1)
+            accuracy_constrained = np.append(accuracy_constrained, accuracy_constrained1)
+            print("Accuracy on adversarial test examples: {}%".format(accuracy_constrained1 * 100))
+
+            accuracy_unconstrained1 = np.sum(np.argmax(predictions_unconstrained, axis=1) ==
+                                             np.argmax(test_label1, axis=1)) / len(test_label1)
+            accuracy_unconstrained = np.append(accuracy_unconstrained, accuracy_unconstrained1)
+            print("Accuracy on adversarial test examples unconstrained: {}%".format(accuracy_unconstrained1 * 100))
+
+
         elif type_of_white_box_attack == 'linf':
-            eps = np.linspace(0.1, 1, 10)
-            if attack_after_standardization == 'a':
-                eps = np.linspace(0.1, 0.3, 10)
+            eps = [10]
             model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
 
@@ -612,8 +623,7 @@ def main():
             plt.show()
 
         elif type_of_white_box_attack == 'l2':
-            # item = 0.1
-            items = np.linspace(0.01, 1, 10)
+            items = [10]
 
             model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
@@ -661,7 +671,7 @@ def main():
             plt.show()
 
         elif type_of_white_box_attack == 'p':
-            eps = np.linspace(0.1, 10, 10)
+            eps = np.linspace(0.01, 0.1, 10)
 
             model_constrained = TensorFlowV2Classifier(model=model_constrained, nb_classes=20, input_shape=(INPUT_SHAPE,)
                                                        , loss_object=CategoricalCrossentropy())
@@ -677,9 +687,9 @@ def main():
                 test_adv_unconstrained = attack_unconstrained.generate(x=test_data)
 
                 if attack_after_standardization == 'a':
-                    train_data, val_data, test_adv_constrained = standardize_dataset(train_data, val_data,
+                    _, _, test_adv_constrained = standardize_dataset(train_data, val_data,
                                                                                      test_adv_constrained)
-                    train_data, val_data, test_adv_unconstrained = standardize_dataset(train_data, val_data,
+                    _, _, test_adv_unconstrained = standardize_dataset(train_data, val_data,
                                                                                        test_adv_unconstrained)
 
                 predictions_constrained = model_constrained.predict(test_adv_constrained)
@@ -709,22 +719,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-        ### Add carlini method to white box attacks from hidden commands paper
-        ### Add gaussian noise over audio and (as putea sa iau inregistrari random, adica nu cele din setul de test? NU)
-        # mfcc's and try these attacks, try adding noise before standardization ------> DONE
-        ### p=0.1 ; 0.3, 0.4 -> grafice ca in tranpami                          ------> DONE
-        ### alpha = 0.1 - 2 ; pas 0.1                                           ------> DONE
-        ### TODO: antrenat cu zgomot (adversarial training) un model neconstrans
-        ### TODO: sa vad daca mai pot adauga exemple in setul de date in timp ce invata
-
-        #### De refacut seturile de antrenament, validare si testare, salvand fisierele audio de testare -> DONE
-        #### ca sa pot pune zgomot alb peste ele
-        #### intrab-o pe profa daca ar trebui sa normalizez audio inainte de a face MFCC? (NU E NEVOIE)
-        #### pentru ca range-ul de valori depinde de la audio la audio
-
-        ### TODO: Add Carlini ASR attack and Imperceptible ASR attack
-        ### Aceste atacuri au la intrare audio dar din paper-uri pare ca iau in calcul MFCC
-
-        ### TODO: Pink Noise
-        ### TODO: Use WER(Word error rate) in loc de accuracy
