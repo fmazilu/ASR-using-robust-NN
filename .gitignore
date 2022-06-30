@@ -3,8 +3,6 @@ Speaker recognition/dataset/
 Voice digit recogniton/data/
 Voice digit recogniton/splitAudioEn/
 Voice digit recogniton/logs/
-Voice digit recogniton/bin/
-Voice digit recogniton/bin/models_constrained/model_Dropout08_moreLayers.h5
 Voice digit recogniton/splitAudio/
 Voice digit recogniton/florin.mp3
 *.npy
