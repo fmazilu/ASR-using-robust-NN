@@ -16,7 +16,6 @@ Speaker recognition/logs/log_constrained20220221-112543/events.out.tfevents.1645
 *.pb
 Speaker recognition/logs/
 Speaker recognition/dataset/
-Speaker recognition/bin/
 Speaker recognition/.idea/
 Speaker recognition/__pycache__/
 Voice digit recogniton/.idea/
