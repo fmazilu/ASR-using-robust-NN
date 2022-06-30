@@ -5,9 +5,7 @@ Voice digit recogniton/splitAudioEn/
 Voice digit recogniton/logs/
 Voice digit recogniton/splitAudio/
 Voice digit recogniton/florin.mp3
-*.npy
 *.wav
-*.h5
 *.v2
 *.FLORIN
 *.FLORIN
